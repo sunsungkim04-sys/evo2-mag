@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "evo2-mag"
+version = "0.1.0"
+description = "Evo 2 DNA foundation model integration for MAG binning, chimera detection, and functional annotation"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "pandas",
+    "hdbscan",
+    "biopython",
+]
+
+[project.scripts]
+evo2-mag = "evo2_mag.cli:main"
