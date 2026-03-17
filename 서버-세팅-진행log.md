@@ -17,7 +17,7 @@ related-project: "[[03_Projects/Evo2-mmlong2-MAG-enhancement]]"
 
 ---
 
-## 현재 상태 (2026-03-16 기준)
+## 현재 상태 (2026-03-17 13:30 기준)
 
 > [!warning] 메인 서버 변경: PC102 → PC101 (영구)
 > PC101 (755GB RAM, 72코어)으로 전면 이전. PC102는 더 이상 사용 안 함.
@@ -28,12 +28,12 @@ related-project: "[[03_Projects/Evo2-mmlong2-MAG-enhancement]]"
 > - `mmlong2 --install_databases` 실행 중 🔄 (PID 3522391, `~/mmlong2_db_install.log`)
 >   - 16S rRNA DB ✅ 완료
 >   - GUNC DB ✅ 완료
->   - **Metabuli DB 🔄 55%** (~2시간 13분 남음, ~11MB/s)
->   - Bakta DB ⏳ 대기
->   - GTDB-Tk ⏳ 대기
-> - CAMI2 데이터 rsync 🔄 (PC102 → PC101, 15/21 샘플 전송 완료, sample 4~9 남음)
->   - 현재 24GB 전송됨, DB 다운로드와 대역폭 경쟁으로 속도 저하 (~1.3MB/s)
->   - DB 완료 후 속도 회복 예상
+>   - **Metabuli DB 🔄 86%** (~2-3시간 남음)
+>   - Bakta DB ⏳ 대기 (~30GB, 예상 ~3.5시간)
+>   - GTDB-Tk ⏳ 대기 (~132GB, 예상 ~15시간)
+>   - 서버 외부 다운로드 속도: ~2.5 MB/s (20 Mbps)
+>   - **전체 DB 설치 완료 예상: 2026-03-18 오전**
+> - CAMI2 데이터 전송 ✅ 완료 (21/21 샘플 PC101 도착)
 > - `git config` (sunsungkim04@gmail.com / sunsungkim04-sys) 완료
 > - `evo2-mag` repo clone → `~/evo2-mag` ✅
 > - GitHub PAT 신규 발급 + remote URL 갱신 (만료: 2026-06-12)
@@ -360,14 +360,14 @@ amber.py -g ~/cami2_data/source_genomes/genome_binning.tsv \
   - [x] `mmlong2 --install_databases` 백그라운드 실행 중 🔄 (PID 3522391)
     - [x] 16S rRNA DB ✅
     - [x] GUNC DB ✅
-    - [ ] Metabuli DB 🔄 55%
-    - [ ] Bakta DB ⏳
-    - [ ] GTDB-Tk ⏳
+    - [ ] Metabuli DB 🔄 86% (~2-3시간 남음)
+    - [ ] Bakta DB ⏳ (~3.5시간)
+    - [ ] GTDB-Tk ⏳ (~15시간)
   - [x] git config + evo2-mag clone + PAT 세팅
   - [x] Mac `~/.ssh/config` → `lab101` 단축키 등록
   - [x] Claude Code 설치 완료 ✅
-  - [ ] CAMI2 데이터 PC101로 전송 🔄 (15/21 샘플 완료, sample 4~9 남음)
-  - [ ] mmlong2 DB 설치 완료 확인
+  - [x] CAMI2 데이터 PC101로 전송 ✅ (21/21 샘플 완료)
+  - [ ] mmlong2 DB 설치 완료 확인 (예상: 2026-03-18 오전)
   - [ ] mmlong2 config 수정 (map-ont / 80% / --nano-raw)
   - [ ] sample_1~21 병렬 실행
 
