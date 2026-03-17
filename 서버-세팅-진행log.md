@@ -17,33 +17,38 @@ related-project: "[[03_Projects/Evo2-mmlong2-MAG-enhancement]]"
 
 ---
 
-## 현재 상태 (2026-03-17 13:30 기준)
+## 현재 상태 (2026-03-17 17:00 기준)
 
 > [!warning] 메인 서버 변경: PC102 → PC101 (영구)
 > PC101 (755GB RAM, 72코어)으로 전면 이전. PC102는 더 이상 사용 안 함.
 
-> [!success] PC101 초기 세팅 완료 ✅
+> [!success] PC101 세팅 완료 + mmlong2 실행 중 🔄
 > - Miniforge 기설치 확인
 > - `conda create -n mmlong2` 설치 완료 ✅
-> - `mmlong2 --install_databases` 실행 중 🔄 (PID 3522391, `~/mmlong2_db_install.log`)
->   - 16S rRNA DB ✅ 완료
->   - GUNC DB ✅ 완료
->   - **Metabuli DB 🔄 86%** (~2-3시간 남음)
->   - Bakta DB ⏳ 대기 (~30GB, 예상 ~3.5시간)
->   - GTDB-Tk ⏳ 대기 (~132GB, 예상 ~15시간)
->   - 서버 외부 다운로드 속도: ~2.5 MB/s (20 Mbps)
->   - **전체 DB 설치 완료 예상: 2026-03-18 오전**
+> - `mmlong2 --install_databases` ✅ **전체 완료** (2026-03-17 15:00)
+>   - 16S rRNA DB ✅
+>   - GUNC DB ✅
+>   - Metabuli DB ✅
+>   - Bakta DB ✅
+>   - GTDB-Tk r226 ✅
 > - CAMI2 데이터 전송 ✅ 완료 (21/21 샘플 PC101 도착)
+> - mmlong2 config 수정 ✅ (CAMI2용: `map-ont`, identity 80%)
+> - **21개 샘플 병렬 실행 중 🔄** (PID 3607034, `~/run_mmlong2_step3.log`)
+>   - 6개 동시 × 12코어 (`-p 12`), 72코어 풀 활용
+>   - Singularity 컨테이너 다운로드 중 (9.1GB, 1회만 필요)
+>   - 컨테이너 완료 후 실제 파이프라인 시작 예정
+>   - GTDB-Tk도 파이프라인 내 자동 실행 (755GB RAM으로 pplacer 문제 없음)
+>   - **전체 완료 예상: 2026-03-18 오후~저녁**
 > - `git config` (sunsungkim04@gmail.com / sunsungkim04-sys) 완료
 > - `evo2-mag` repo clone → `~/evo2-mag` ✅
 > - GitHub PAT 신규 발급 + remote URL 갱신 (만료: 2026-06-12)
 > - Mac `~/.ssh/config`에 `lab101` 단축키 등록 완료
 > - Claude Code 설치 완료 ✅ (conda nodejs + npm)
 
-> [!note] 다음 단계 (DB + rsync 완료 후)
-> 1. mmlong2 config 수정 (CAMI2용: `map-ont`, identity 80%, `--nano-raw`, MetaBat2 touch)
-> 2. 21개 샘플 병렬 실행
-> 3. Phase 3: RunPod 계정 세팅 → H100 80GB 사용 예정 (7B PoC 먼저, 예산 ~$100)
+> [!note] 다음 단계 (21개 샘플 완료 후)
+> 1. 전체 결과 확인 (bins.tsv, general.tsv)
+> 2. Phase 3: RunPod 계정 세팅 → H100 80GB 사용 예정 (7B PoC 먼저, 예산 ~$100)
+> 3. Phase 2 결과 → RunPod 전송 → Evo 2 임베딩 추출
 
 > [!tip] 노트 동기화 (Mac에서)
 > ```bash
@@ -357,19 +362,18 @@ amber.py -g ~/cami2_data/source_genomes/genome_binning.tsv \
 - [x] **PC101 전면 이전 확정** — PC102 버림, PC101이 메인
   - [x] PC101 접속 + 계정 확인 ✅ (minseo1101 / 8375)
   - [x] `conda create -n mmlong2` 설치 완료
-  - [x] `mmlong2 --install_databases` 백그라운드 실행 중 🔄 (PID 3522391)
+  - [x] `mmlong2 --install_databases` ✅ 완료 (2026-03-17 15:00)
     - [x] 16S rRNA DB ✅
     - [x] GUNC DB ✅
-    - [ ] Metabuli DB 🔄 86% (~2-3시간 남음)
-    - [ ] Bakta DB ⏳ (~3.5시간)
-    - [ ] GTDB-Tk ⏳ (~15시간)
+    - [x] Metabuli DB ✅
+    - [x] Bakta DB ✅
+    - [x] GTDB-Tk r226 ✅
   - [x] git config + evo2-mag clone + PAT 세팅
   - [x] Mac `~/.ssh/config` → `lab101` 단축키 등록
   - [x] Claude Code 설치 완료 ✅
   - [x] CAMI2 데이터 PC101로 전송 ✅ (21/21 샘플 완료)
-  - [ ] mmlong2 DB 설치 완료 확인 (예상: 2026-03-18 오전)
-  - [ ] mmlong2 config 수정 (map-ont / 80% / --nano-raw)
-  - [ ] sample_1~21 병렬 실행
+  - [x] mmlong2 config 수정 ✅ (`map-ont` / identity 80%)
+  - [ ] 21개 샘플 병렬 실행 🔄 (PID 3607034, 6개×12코어, 예상 ~24시간)
 
 ### GitHub Repo ✅
 - [x] `git init evo2-mag` (서버에서 생성)
