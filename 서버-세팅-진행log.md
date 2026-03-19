@@ -5,7 +5,7 @@ tags:
   - 서버세팅
   - CAMI2
 created: 2026-03-14
-updated: 2026-03-17
+updated: 2026-03-19
 status: in-progress
 related-project: "[[03_Projects/Evo2-mmlong2-MAG-enhancement]]"
 ---
@@ -17,7 +17,53 @@ related-project: "[[03_Projects/Evo2-mmlong2-MAG-enhancement]]"
 
 ---
 
-## 현재 상태 (2026-03-17 17:00 기준)
+## 현재 상태 (2026-03-19 13:00 기준)
+
+> [!success] Phase 2 Baseline A — mmlong2 전체 완료 ✅
+> **21개 샘플 전부 mmlong2 파이프라인 (lite + proc) 완료**
+>
+> ### 결과 요약 (131 MAGs)
+> | 지표 | 값 |
+> |------|-----|
+> | 총 MAG 수 | **131개** |
+> | HQ (comp ≥90%, cont <5%) | **52개 (39.7%)** |
+> | MQ (comp ≥50%, cont <10%) | **79개 (60.3%)** |
+> | LQ | **0개** |
+> | 평균 completeness (CheckM2) | **83.7%** |
+> | 평균 contamination (CheckM2) | **1.52%** |
+> | 평균 genome size | **6.2 Mbp** |
+> | 평균 N50 | **1,100 kbp** |
+> | 평균 coverage | **22.9x** |
+> | GUNC pass | **126/131 (96.2%)** |
+>
+> ### 샘플별 MAG 수
+> | 샘플 | bins | HQ | MQ | 샘플 | bins | HQ | MQ |
+> |------|------|-----|-----|------|------|-----|-----|
+> | 0 | 4 | 2 | 2 | 11 | 6 | 3 | 3 |
+> | 1 | 5 | 3 | 2 | 12 | 6 | 1 | 5 |
+> | 2 | 5 | 3 | 2 | 13 | 5 | 4 | 1 |
+> | 3 | 6 | 2 | 3 | 14 | 4 | 0 | 3 |
+> | 4 | 8 | 4 | 3 | 15 | 8 | 4 | 4 |
+> | 5 | 5 | 4 | 1 | 16 | 10 | 3 | 6 |
+> | 6 | 4 | 1 | 3 | 17 | 8 | 2 | 6 |
+> | 7 | 5 | 2 | 1 | 18 | 8 | 4 | 4 |
+> | 8 | 5 | 3 | 2 | 19 | 8 | 3 | 5 |
+> | 9 | 7 | 3 | 3 | 20 | 9 | 5 | 4 |
+> | 10 | 5 | 4 | 1 | | | | |
+>
+> ### 실행 중 발생한 이슈 & 해결
+> 1. **AMRFinderPlus DB 버전 불일치** → `amrfinder_update --force_update` 실행 후 해결
+> 2. **sample 17 입력 파일 손상** (gzip truncated) → `frl.publisso.de`에서 재다운로드 후 처음부터 실행
+> 3. **sample 10 BAM 파일 손상** → 수동으로 minimap2+samtools로 BAM 재생성 후 proc 완료
+
+> [!note] 다음 단계
+> 1. Phase 3: RunPod 계정 세팅 → H100/A100 80GB 사용 예정 (7B PoC 먼저, 예산 ~$100)
+> 2. Phase 2 결과 (assembly + bins) → RunPod 전송
+> 3. Evo 2 7B 임베딩 추출 시작
+
+---
+
+## 이전 상태 (2026-03-17 17:00 기준)
 
 > [!warning] 메인 서버 변경: PC102 → PC101 (영구)
 > PC101 (755GB RAM, 72코어)으로 전면 이전. PC102는 더 이상 사용 안 함.
@@ -44,11 +90,6 @@ related-project: "[[03_Projects/Evo2-mmlong2-MAG-enhancement]]"
 > - GitHub PAT 신규 발급 + remote URL 갱신 (만료: 2026-06-12)
 > - Mac `~/.ssh/config`에 `lab101` 단축키 등록 완료
 > - Claude Code 설치 완료 ✅ (conda nodejs + npm)
-
-> [!note] 다음 단계 (21개 샘플 완료 후)
-> 1. 전체 결과 확인 (bins.tsv, general.tsv)
-> 2. Phase 3: RunPod 계정 세팅 → H100 80GB 사용 예정 (7B PoC 먼저, 예산 ~$100)
-> 3. Phase 2 결과 → RunPod 전송 → Evo 2 임베딩 추출
 
 > [!tip] 노트 동기화 (Mac에서)
 > ```bash
@@ -275,33 +316,93 @@ ps aux | grep mmlong2 | grep -v grep | wc -l
 
 ---
 
-## Phase 3. Enhanced B — Evo 2 추가 ⏳ 대기 중
+## Phase 3. Enhanced B — Evo 2 추가 🔄 실행 중
 
-> [!info] Phase 2 완료 후 시작
-> mmlong2 결과물(assembly.fasta, bins/)이 있어야 Evo 2 실행 가능
+> [!warning] RunPod H100 SXM 실행 중 (2026-03-19 14:00~ KST)
+> - SSH: `ssh root@64.247.201.49 -p 13118 -i ~/.ssh/id_ed25519`
+> - 요금: $1.7/hr
+> - Evo 2 7B 임베딩 추출 🔄 (~21시간, ~$36 예상)
+> - 처리 속도: ~33 contigs/분, 총 42,320개
+> - GPU 메모리: 19GB/80GB 사용 (여유 충분)
 
 ### 실행 환경
 - **연구실 서버**: GPU 없음 → Evo 2 실행 불가
-- **RunPod**: A100 GPU 인스턴스 필요
-  - 7B 모델: 1× A100 40GB, ~$1.5/hr
-  - 40B 모델: 4× A100 80GB, ~$6/hr
+- **RunPod**: **H100 SXM 80GB** GPU 인스턴스
+  - 7B 모델: 1× H100 SXM 80GB, ~$3.5/hr
+  - 40B 모델: 4× H100 SXM 80GB, ~$14/hr
   - **전략: 7B 먼저 → 결과 확인 → 필요시 40B**
 
-### Phase 2 완료 후 RunPod으로 데이터 전송
-```bash
-# 연구실 서버 → RunPod
-rsync -avz --progress \
-    ~/results/baseline_sample0/results/assembly.fasta \
-    ~/results/baseline_sample0/results/bins/ \
-    root@{RUNPOD_IP}:/workspace/data/from_server/ -p {PORT}
+### 전송 데이터 (연구실 서버에서 준비 완료 ✅)
+```
+~/cami2_baseline_for_runpod.tar.gz   # 832MB (assembly 21개 + bins 21개)
+~/cami2_contig_bin_all.tsv           # contig-to-bin 매핑 (4,615 contigs)
+~/evo2-mag/scripts/run_embed.py      # 임베딩 추출 스크립트
+~/evo2-mag/scripts/run_cluster.py    # HDBSCAN 클러스터링 스크립트
+~/evo2-mag/scripts/runpod_setup.sh   # 원스톱 실행 스크립트
 ```
 
-### Evo 2 작업 순서 (RunPod에서)
-1. **임베딩 추출** → contig별 DNA 언어 벡터 → 4번째 비닝 신호
-2. **HDBSCAN 클러스터링** → evo2_c2b.tsv 생성
-3. **DAS Tool 재실행** (기존 3종 + Evo 2 = 4종)
-4. **Perplexity 측정** → 키메라 탐지
-5. 결과 회수: RunPod → 연구실 서버
+### 임베딩 대상 규모
+- 총 contig 수: **42,320개**
+- 평균 contig 길이: **50kbp** (최대 7Mbp)
+- Evo 2 7B 모델 크기: ~14GB (bfloat16)
+- 임베딩 레이어: `blocks.28.mlp.l3` (intermediate layer, 경험적으로 최적)
+
+### RunPod 실행 순서 (H100 SXM에서)
+
+> [!warning] 돈 절약 핵심
+> 스크립트 미리 완성됨 → GPU 켜놓고 코딩 X → 켜자마자 바로 실행 → 끝나면 즉시 종료
+
+**방법 1: 원스톱 스크립트 (권장)**
+```bash
+# RunPod 터미널에서
+git clone https://github.com/sunsungkim04-sys/evo2-mag.git /workspace/evo2-mag
+bash /workspace/evo2-mag/scripts/runpod_setup.sh
+# → 데이터 수신 → 환경 설치 → 임베딩 추출 → 클러스터링 → 결과 회수 → 전부 자동
+```
+
+**방법 2: 단계별 수동 실행**
+```bash
+# 1) 데이터 수신
+scp -P 8375 minseo1101@155.230.164.215:~/cami2_baseline_for_runpod.tar.gz /workspace/
+scp -P 8375 minseo1101@155.230.164.215:~/cami2_contig_bin_all.tsv /workspace/results/
+mkdir -p /workspace/data && cd /workspace/data && tar xzf /workspace/cami2_baseline_for_runpod.tar.gz
+
+# 2) 환경 설치
+pip install evo2 biopython hdbscan scikit-learn
+
+# 3) 임베딩 추출 (~2-3시간, H100 SXM 기준)
+python /workspace/evo2-mag/scripts/run_embed.py \
+    --data_dir /workspace/data --output_dir /workspace/results
+
+# 4) HDBSCAN 클러스터링 (~5분)
+python /workspace/evo2-mag/scripts/run_cluster.py
+
+# 5) 결과 회수
+scp -P 8375 /workspace/results/contig_embeddings.npz minseo1101@155.230.164.215:~/results/
+scp -P 8375 /workspace/results/evo2_c2b.tsv minseo1101@155.230.164.215:~/results/
+```
+
+### 예상 비용 (실측 기반 수정)
+| 항목 | 시간 | 비용 ($1.7/hr) |
+|------|------|---------|
+| 데이터 전송 + 환경 세팅 | ~15분 | ~$0.4 |
+| 임베딩 추출 (42k contigs, max_len=8k) | ~21시간 | ~$36 |
+| HDBSCAN 클러스터링 | ~5분 | ~$0.1 |
+| Perplexity 키메라 탐지 (131 bins) | ~2-3시간 | ~$4-5 |
+| **합계** | **~24-25시간** | **~$41-42** |
+
+### 실행 중 발생한 이슈 & 해결
+1. `torch.load` weights_only 호환 → `torch.serialization.add_safe_globals` 추가
+2. bfloat16 → float32 변환 → `.float().cpu().numpy()` 수정
+3. 32bit index overflow (max_len=512k) → **max_len=8192**로 축소
+4. stdout 버퍼링으로 로그 안 보임 → `python3 -u` (unbuffered) 모드 사용
+
+### RunPod 작업 완료 후 — PC101에서 할 일
+1. **Binette 재실행** — 기존 3종(VAMB+MetaBAT2+SemiBin2) + Evo2 `evo2_bins/` = 4종 앙상블
+   - mmlong2는 DAS Tool이 아닌 **Binette**로 bin 앙상블 수행
+   - `run_cluster.py`가 Binette 입력 형식(per-bin FASTA 디렉토리)으로 출력
+2. **CheckM2** — Enhanced bins 품질 평가
+3. Phase 4 AMBER 평가로 이동 (Baseline A vs Enhanced B)
 
 ---
 
@@ -342,7 +443,7 @@ amber.py -g ~/cami2_data/source_genomes/genome_binning.tsv \
 - [x] 데이터 다운로드 (21개 샘플 + ground truth)
 - [x] 압축 해제 확인
 
-### Phase 2 🔄
+### Phase 2 ✅ 완료 (2026-03-19)
 - [x] mmlong2 --install_databases 완료 ✅ (2026-03-15 17:07)
   - [x] Greengenes2 DB ✅
   - [x] GUNC DB ✅
@@ -350,30 +451,22 @@ amber.py -g ~/cami2_data/source_genomes/genome_binning.tsv \
   - [x] Bakta DB ✅
   - [x] GTDB-Tk r226 ✅
 - [x] sample_0 첫 실행 → coverage 0 문제 (config 미스매치)
-- [x] config 수정 (`map-ont`, identity 80%) + sample_0 재실행 (PID 2435208) 🔄
-  ```bash
-  # config 수정 후 재실행
-  nohup mmlong2 -np ~/cami2_data/simulation_nanosim/2020.01.23_15.51.11_sample_0/reads/anonymous_reads.fq.gz \
-      -o ~/results/baseline_sample0 -p 64 > ~/mmlong2_sample0.log 2>&1 &
-  ```
-- [x] sample_0 완료 확인 (`ls ~/results/baseline_sample0/results/bins.tsv`)
-- [x] 나머지 20개 병렬 실행 시작 (4개 동시, 16코어씩, 예상 ~2일)
-- [ ] 전체 21개 완료 확인
+- [x] config 수정 (`map-ont`, identity 80%) + sample_0 재실행
+- [x] sample_0 완료 확인
 - [x] **PC101 전면 이전 확정** — PC102 버림, PC101이 메인
   - [x] PC101 접속 + 계정 확인 ✅ (minseo1101 / 8375)
   - [x] `conda create -n mmlong2` 설치 완료
   - [x] `mmlong2 --install_databases` ✅ 완료 (2026-03-17 15:00)
-    - [x] 16S rRNA DB ✅
-    - [x] GUNC DB ✅
-    - [x] Metabuli DB ✅
-    - [x] Bakta DB ✅
-    - [x] GTDB-Tk r226 ✅
   - [x] git config + evo2-mag clone + PAT 세팅
   - [x] Mac `~/.ssh/config` → `lab101` 단축키 등록
   - [x] Claude Code 설치 완료 ✅
   - [x] CAMI2 데이터 PC101로 전송 ✅ (21/21 샘플 완료)
   - [x] mmlong2 config 수정 ✅ (`map-ont` / identity 80%)
-  - [ ] 21개 샘플 병렬 실행 🔄 (PID 3607034, 6개×12코어, 예상 ~24시간)
+- [x] 21개 샘플 병렬 실행 (6개×12코어) ✅
+- [x] AMRFinderPlus DB 업데이트 (`amrfinder_update --force_update`) ✅
+- [x] sample 17 입력파일 재다운로드 (`frl.publisso.de`) + 재실행 ✅
+- [x] sample 10 BAM 수동 복구 + proc 재실행 ✅
+- [x] **전체 21개 샘플 완료 확인** ✅ (131 MAGs: HQ 52, MQ 79)
 
 ### GitHub Repo ✅
 - [x] `git init evo2-mag` (서버에서 생성)
@@ -382,14 +475,24 @@ amber.py -g ~/cami2_data/source_genomes/genome_binning.tsv \
 - [x] 프로젝트 구조 생성 (src/evo2_mag, tests, docs, scripts)
 - [x] pyproject.toml 작성 (pip install 준비)
 
-### Phase 3 ⏳
-- [ ] RunPod 계정 세팅 (H100 80GB 예정, 7B PoC 먼저, 예산 ~$100)
-- [ ] Phase 2 결과 RunPod으로 전송
-- [ ] Evo 2 7B 임베딩 추출
-- [ ] HDBSCAN 클러스터링 → evo2_c2b.tsv
-- [ ] DAS Tool 4-binner 재실행
-- [ ] Perplexity 키메라 탐지
-- [ ] 결과 회수
+### Phase 3 🔄 준비 완료 (RunPod 실행 대기)
+- [x] 전송 데이터 패킹 ✅ (`~/cami2_baseline_for_runpod.tar.gz`, 832MB)
+- [x] contig-to-bin 통합 매핑 생성 ✅ (`~/cami2_contig_bin_all.tsv`, 4,615 contigs)
+- [x] 임베딩 추출 스크립트 작성 ✅ (`scripts/run_embed.py`)
+- [x] HDBSCAN 클러스터링 스크립트 작성 ✅ (`scripts/run_cluster.py`)
+- [x] RunPod 원스톱 실행 스크립트 작성 ✅ (`scripts/runpod_setup.sh`)
+- [x] RunPod 계정 세팅 ✅ (H100 SXM 80GB × 1)
+- [x] RunPod 인스턴스 실행 ✅ (`ssh root@64.247.201.49 -p 13118`)
+- [x] 데이터 전송 (PC101 → RunPod) ✅ scp로 832MB 전송 완료
+- [x] 환경 설치 ✅ (evo2, flash-attn, biopython, hdbscan)
+- [ ] Evo 2 7B 임베딩 추출 🔄 (42,320 contigs, max_len=8192)
+  - torch.load weights_only 호환 수정
+  - bfloat16 → float32 변환 추가
+  - 32bit index overflow → max_len 축소 (512k → 8k)
+- [ ] HDBSCAN 클러스터링 → `evo2_c2b.tsv`
+- [ ] 결과 회수 (RunPod → 연구실 서버 PC101)
+- [ ] DAS Tool 4-binner 재실행 (연구실 서버, GPU 불필요)
+- [ ] Perplexity 키메라 탐지 (추가 GPU 필요할 수 있음)
 
 ### Phase 4 ⏳
 - [ ] AMBER Baseline A 평가
