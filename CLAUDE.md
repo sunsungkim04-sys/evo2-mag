@@ -126,31 +126,23 @@ Revert after CAMI2 experiments.
 ~/results/chimera_candidates.tsv    # 키메라 후보 (237개)
 ```
 
-### Phase 3d — Binette Enhanced 앙상블 🔄 진행 중 (PC101)
+### Phase 3d — Binette Enhanced 앙상블 ✅ 20/21 완료, sample_10 🔄 진행 중
 - 기존 3종(VAMB+MetaBAT2+SemiBin2) + **Evo2 bins** = 4종 앙상블
-- Singularity 컨테이너 내 Binette 1.1.2 사용
+- Singularity 컨테이너 내 Binette 1.1.2 + CheckM2 사용 (PATH=/opt/conda/envs/env_8/bin)
 - Evo2 bins 필터링 적용 (contigs.fasta에 없는 split contig 제거)
-- 6개 샘플 병렬, 샘플당 12 threads
-- `run_binette_enhanced.sh` → `binette_enhanced/` 디렉토리에 결과 저장
+- **20개 샘플 완료: 총 163 Enhanced bins** (Baseline 131 → +32)
+- sample_10: 원래 np_map_ident=95에서 binning 실패 → 수동으로 np_map_ident=80 재실행 중
+  - minimap2 mapping ✅ → coverage + MetaBAT2 + VAMB + SemiBin2 🔄 진행 중
+  - 완료 후 Binette enhanced 실행 예정
 
-### Phase 3 RunPod 경로
-```
-/workspace/data/baseline_sample*/results/*_assembly.fasta  # 입력 (21개 샘플)
-/workspace/results/contig_embeddings.npz                   # 임베딩 출력 (완료 후 생성)
-/workspace/results/contig_names.txt                        # contig 이름 목록
-/workspace/results/evo2_c2b.tsv                            # 클러스터링 결과 (완료 후)
-/workspace/results/evo2_bins/                              # bin별 FASTA (Binette 입력용)
-/workspace/embed.log                                       # 임베딩 진행 로그
-/workspace/after_embed.log                                 # 자동 파이프라인 로그
-/workspace/scripts/run_embed.py                            # 현재 실행 중인 버전
-/workspace/scripts/run_embed_v2.py                         # 중간저장 버전 (재시작용)
-/workspace/scripts/run_cluster.py                          # HDBSCAN 클러스터링
-/workspace/scripts/run_perplexity.py                       # perplexity (최적화 필요)
-/workspace/scripts/after_embed.sh                          # 임베딩 후 자동 파이프라인 (perplexity 제외)
-```
+### 실행 중 발견된 이슈 & 해결
+1. BioPython 미설치 → `pip install biopython` (PC101)
+2. CheckM2 PATH 문제 → singularity exec 시 `PATH=/opt/conda/envs/env_8/bin` 설정
+3. Evo2 bins 필터링 0개 → BioPython 없어서 조용히 실패 → 설치 후 해결
+4. sample_10 binning 실패 → np_map_ident=95 (config sed 패턴 불일치로 80 적용 안 됨) → 수동 재실행
 
 ### Phase 4 — AMBER 평가 ⏳ 대기
-- 임베딩+클러스터링 끝난 후 PC101에서 실행 (perplexity 완료 안 기다려도 됨)
+- sample_10 완료 후 전체 21개 샘플로 Baseline A vs Enhanced B 정량 비교
 
 ## GitHub
 

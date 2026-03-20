@@ -104,13 +104,11 @@ if recs:
     fi
 
     # Binette 4종 앙상블 실행
-    singularity exec "$SING" "$BINETTE" \
-        -d "$tmpdir/vamb" "$tmpdir/metabat2" "$tmpdir/semibin" "$evo2_filtered" \
-        -c "$contigs" \
-        -o "$outdir" \
-        -w "$WEIGHT" \
-        -m "$MIN_COMPL" \
-        -t "$THREADS"
+    singularity exec "$SING" bash -c "
+        export PATH=/opt/conda/envs/env_8/bin:\$PATH
+        binette -d '$tmpdir/vamb' '$tmpdir/metabat2' '$tmpdir/semibin' '$evo2_filtered' \
+            -c '$contigs' -o '$outdir' -w $WEIGHT -m $MIN_COMPL -t $THREADS
+    "
 
     # 임시 파일 정리
     rm -rf "$tmpdir"
