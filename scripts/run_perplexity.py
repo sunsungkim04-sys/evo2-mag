@@ -23,14 +23,14 @@ import torch
 from Bio import SeqIO
 
 
-def compute_perplexity_windows(model, sequence, window_size=50000, step_size=25000, batch_size=4):
+def compute_perplexity_windows(model, sequence, window_size=8000, step_size=4000, batch_size=1):
     """Compute per-window perplexity using Evo 2 log-likelihoods.
 
     Args:
         model: Evo2 model instance
         sequence: DNA string (ACGT only)
-        window_size: sliding window size in bp (default 50kb)
-        step_size: step size in bp (default 25kb)
+        window_size: sliding window size in bp (default 8kb, matches embed max_len)
+        step_size: step size in bp (default 4kb)
 
     Returns:
         windows: list of (start, end, perplexity) tuples
@@ -74,7 +74,7 @@ def _batch_perplexity(model, seqs, batch_size=4):
                         model.tokenizer.tokenize(seq), dtype=torch.long
                     ).unsqueeze(0).to("cuda:0")
 
-                    logits, _ = model(input_ids, return_embeddings=False, layer_names=[])
+                    (logits, _), _ = model(input_ids, return_embeddings=False, layer_names=[])
 
                     shift_logits = logits[:, :-1, :].contiguous()
                     shift_labels = input_ids[:, 1:].contiguous()
@@ -84,10 +84,12 @@ def _batch_perplexity(model, seqs, batch_size=4):
                         shift_labels.view(-1),
                     )
                     batch_ppls.append(torch.exp(loss).item())
+                    del input_ids, logits, shift_logits, shift_labels, loss
                 except Exception as e:
                     print(f"    Warning: perplexity computation failed: {e}")
                     batch_ppls.append(None)
 
+        torch.cuda.empty_cache()
         results.extend(batch_ppls)
 
     return results
@@ -101,7 +103,7 @@ def _single_perplexity(model, seq):
                 model.tokenizer.tokenize(seq), dtype=torch.long
             ).unsqueeze(0).to("cuda:0")
 
-            logits, _ = model(input_ids, return_embeddings=False, layer_names=[])
+            (logits, _), _ = model(input_ids, return_embeddings=False, layer_names=[])
 
             shift_logits = logits[:, :-1, :].contiguous()
             shift_labels = input_ids[:, 1:].contiguous()
@@ -109,7 +111,9 @@ def _single_perplexity(model, seq):
             loss_fn = torch.nn.CrossEntropyLoss()
             loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
             perplexity = torch.exp(loss).item()
+            del input_ids, logits, shift_logits, shift_labels, loss
 
+        torch.cuda.empty_cache()
         return perplexity
     except Exception as e:
         print(f"    Warning: perplexity computation failed: {e}")
@@ -122,9 +126,9 @@ def main():
                         help="Directory with baseline_sample*/results/bins/*.fa")
     parser.add_argument("--output_dir", default="/workspace/results")
     parser.add_argument("--model", default="evo2_7b")
-    parser.add_argument("--window_size", type=int, default=50000, help="Window size in bp")
-    parser.add_argument("--step_size", type=int, default=25000, help="Step size in bp")
-    parser.add_argument("--batch_size", type=int, default=4, help="Batch size for forward passes")
+    parser.add_argument("--window_size", type=int, default=8000, help="Window size in bp")
+    parser.add_argument("--step_size", type=int, default=4000, help="Step size in bp")
+    parser.add_argument("--batch_size", type=int, default=1, help="Batch size for forward passes")
     parser.add_argument("--sigma", type=float, default=2.0, help="Sigma threshold for flagging")
     args = parser.parse_args()
 

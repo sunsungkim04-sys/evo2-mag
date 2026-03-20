@@ -78,6 +78,26 @@ run_sample() {
         done
     fi
 
+    # Evo2 bins 필터링: contigs.fasta에 없는 contig 제거
+    # (assembly에서 split된 짧은 조각이 mmlong2 filtering에서 제거되어 불일치 발생)
+    local evo2_filtered="${tmpdir}/evo2"
+    mkdir -p "$evo2_filtered"
+    local valid_contigs="${tmpdir}/valid_contigs.txt"
+    grep "^>" "$contigs" | sed 's/^>//' > "$valid_contigs"
+    for f in "$evo2dir"/*.fa; do
+        local out_fa="${evo2_filtered}/$(basename "$f")"
+        python3 -c "
+from Bio import SeqIO
+import sys
+valid = set(open('${valid_contigs}').read().strip().split('\n'))
+recs = [r for r in SeqIO.parse('${f}', 'fasta') if r.id in valid]
+if recs:
+    SeqIO.write(recs, '${out_fa}', 'fasta')
+" 2>/dev/null
+    done
+    local evo2_filtered_n=$(ls "$evo2_filtered"/*.fa 2>/dev/null | wc -l)
+    echo "    evo2 filtered: $evo2_n → $evo2_filtered_n bins (contigs.fasta 기준)"
+
     # 이전 결과 있으면 삭제
     if [ -d "$outdir" ]; then
         rm -rf "$outdir"
@@ -85,7 +105,7 @@ run_sample() {
 
     # Binette 4종 앙상블 실행
     singularity exec "$SING" "$BINETTE" \
-        -d "$tmpdir/vamb" "$tmpdir/metabat2" "$tmpdir/semibin" "$evo2dir" \
+        -d "$tmpdir/vamb" "$tmpdir/metabat2" "$tmpdir/semibin" "$evo2_filtered" \
         -c "$contigs" \
         -o "$outdir" \
         -w "$WEIGHT" \

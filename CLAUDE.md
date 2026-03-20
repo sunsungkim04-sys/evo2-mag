@@ -92,7 +92,7 @@ Revert after CAMI2 experiments.
 | Chimera detection | CheckM2 | CheckM2+Evo2 perplexity | contamination rate |
 | Functional annotation | Prokka/eggNOG | +Evo2 likelihood | hypothetical→functional ratio |
 
-## Current Status (2026-03-20 09:50 KST 기준)
+## Current Status (2026-03-20 20:00 KST 기준)
 
 ### Phase 2 — mmlong2 Baseline ✅ 완료
 - 21개 샘플 전부 완료 (3/18 14:13)
@@ -100,38 +100,38 @@ Revert after CAMI2 experiments.
 - 출력 파일명: `baseline_sampleN_bins.tsv` (not `bins.tsv`)
 - 결과 경로: `~/results/baseline_sampleN/results/` (assembly, bins, bins.tsv 등)
 
-### Phase 3a — Evo 2 임베딩 🔄 진행 중 (RunPod)
+### Phase 3a — Evo 2 임베딩 ✅ 완료 (RunPod)
+- 42,320 contigs 임베딩 완료 (3/20 08:03 UTC)
+- `contig_embeddings.npz` (546MB, 42320×4096d)
+- RunPod H100 SXM 80GB, 총 ~27시간, 비용 ~$46
 
-**RunPod 접속**: `ssh root@64.247.201.49 -p 13118 -i ~/.ssh/id_ed25519` (H100 80GB, $1.7/hr)
+### Phase 3b — HDBSCAN 클러스터링 ✅ 완료
+- PCA 4096d → 50d (explained variance: 99.9%) + HDBSCAN
+- 403 clusters, 6398/42320 contigs assigned (84.9% noise — 앙상블에서 걸러짐)
+- `evo2_c2b.tsv` + `evo2_bins/` (샘플별 bin FASTA)
 
-**현재 실행 중**: `run_embed.py --max_len 8192` (PID 3130)
-- 3/19 05:23 시작, 15/21 샘플 완료 (3/20 09:50 기준)
-- 샘플당 ~64~98분 (contig 수에 비례), contig당 ~2.2초
-- **남은 6개 샘플 → 약 6-8시간 후 완료 예상**
-- 누적 비용: ~$66 (예상 총 ~$82)
-- **마지막에 한꺼번에 저장**하는 구조 — 크래시 시 전체 유실 위험
-- 진행 확인: `tail -f /workspace/embed.log` 또는 `grep -c 'Done in' /workspace/embed.log`
+### Phase 3c — Perplexity 키메라 탐지 ✅ 완료
+- 131 bins, 5351 windows 분석, **237개 키메라 후보** flagged
+- window 8kb / step 4kb, batch_size 1 (OOM 방지)
+- `perplexity_windows.tsv` + `chimera_candidates.tsv`
+- 실행 중 발견된 이슈: 50kb window → CUDA OOM → 8kb로 축소, model output unpacking 버그 수정
 
-**after_embed.sh 자동 실행 중** (PID 26281):
-- 임베딩 PID 종료 감시 → 클러스터링 → PC101 백업 자동 수행
-- perplexity는 **제외** (별도 최적화 후 실행 예정)
-- 로그: `tail -f /workspace/after_embed.log`
+### Phase 3 결과 (PC101 백업 완료)
+```
+~/results/contig_embeddings.npz     # 임베딩 (546MB)
+~/results/contig_names.txt          # contig 이름 목록
+~/results/evo2_c2b.tsv              # 클러스터링 결과
+~/results/evo2_bins/                # bin별 FASTA (Binette 입력용)
+~/results/perplexity_windows.tsv    # perplexity 전체
+~/results/chimera_candidates.tsv    # 키메라 후보 (237개)
+```
 
-**RunPod → PC101 SSH 설정 완료**: RunPod에서 `ssh -p 8375 minseo1101@155.230.164.215` 가능 (ed25519 키 등록됨)
-
-### Phase 3b — Perplexity 키메라 탐지 ✅ 최적화 완료
-
-**최적화 내용** (3/20):
-- window 10kb → **50kb**, step 5kb → **25kb** (forward pass ~9배 감소)
-- 배치 처리 추가 (`--batch_size 4`)
-- `dtype=torch.int` → `torch.long` 버그 수정
-- 중간 저장 (bin별 flush) + resume 지원 (크래시 후 재실행 시 자동 이어서 처리)
-- 예상: **~5-8시간, ~$10-14** (기존 ~90시간/$153)
-
-### Phase 3 자동 파이프라인 (임베딩 완료 후 자동 실행)
-1. ✅ HDBSCAN 클러스터링 (`run_cluster.py`) → `evo2_c2b.tsv` + `evo2_bins/`
-2. ✅ Perplexity 키메라 탐지 (`run_perplexity.py`) → `perplexity_windows.tsv` + `chimera_candidates.tsv`
-3. ✅ 결과 PC101 백업 (scp, 실패해도 RunPod에 파일 남음)
+### Phase 3d — Binette Enhanced 앙상블 🔄 진행 중 (PC101)
+- 기존 3종(VAMB+MetaBAT2+SemiBin2) + **Evo2 bins** = 4종 앙상블
+- Singularity 컨테이너 내 Binette 1.1.2 사용
+- Evo2 bins 필터링 적용 (contigs.fasta에 없는 split contig 제거)
+- 6개 샘플 병렬, 샘플당 12 threads
+- `run_binette_enhanced.sh` → `binette_enhanced/` 디렉토리에 결과 저장
 
 ### Phase 3 RunPod 경로
 ```

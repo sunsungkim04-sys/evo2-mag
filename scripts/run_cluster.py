@@ -20,6 +20,7 @@ from collections import defaultdict
 import hdbscan
 import numpy as np
 from Bio import SeqIO
+from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 
@@ -44,6 +45,7 @@ def main():
     parser.add_argument("--output_dir", default="/workspace/results")
     parser.add_argument("--min_cluster_size", type=int, default=5)
     parser.add_argument("--min_samples", type=int, default=3)
+    parser.add_argument("--pca_dim", type=int, default=50, help="PCA dimensions (0=skip)")
     args = parser.parse_args()
 
     # Load embeddings
@@ -60,6 +62,14 @@ def main():
     print("Normalizing embeddings (z-score)...")
     scaler = StandardScaler()
     embeddings_norm = scaler.fit_transform(embeddings)
+
+    # PCA dimensionality reduction
+    if args.pca_dim > 0:
+        print(f"PCA: {embeddings_norm.shape[1]}d → {args.pca_dim}d ...")
+        pca = PCA(n_components=args.pca_dim)
+        embeddings_norm = pca.fit_transform(embeddings_norm)
+        explained = pca.explained_variance_ratio_.sum() * 100
+        print(f"  Explained variance: {explained:.1f}%")
 
     # HDBSCAN
     print(f"Running HDBSCAN (min_cluster_size={args.min_cluster_size}, min_samples={args.min_samples})...")
