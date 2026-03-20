@@ -84,13 +84,20 @@ CAMI2 data uses old NanoSim (error rate ~10-15%), requiring these overrides:
 
 Revert after CAMI2 experiments.
 
-## A/B Comparison Design
+## A/B/C Comparison Design
 
-| Task | Baseline A | Enhanced B | Metrics |
-|------|-----------|-----------|---------|
-| Binning | MetaBAT2+SemiBin2+GraphMB | +Evo2 embedding (4th binner) | HQ/MQ MAG count, ARI |
-| Chimera detection | CheckM2 | CheckM2+Evo2 perplexity | contamination rate |
-| Functional annotation | Prokka/eggNOG | +Evo2 likelihood | hypothetical→functional ratio |
+| Task | Baseline A (mmlong2) | +Evo 2 (B) | +DNABERT-S (C) | Metrics |
+|------|---------------------|------------|----------------|---------|
+| Binning (ensemble) | MetaBAT2+SemiBin2+GraphMB → Binette | +Evo2 embedding (5th binner) → Binette | +DNABERT-S embedding (5th binner) → Binette | HQ/MQ MAG count, ARI |
+| Embedding-only binning | — | Evo2 → HDBSCAN | DNABERT-S → HDBSCAN | ARI, precision, recall |
+| Chimera detection | CheckM2 | CheckM2+Evo2 perplexity | — | contamination rate |
+| Functional annotation | Prokka/eggNOG | +Evo2 likelihood | — | hypothetical→functional ratio |
+
+### Phase 3d — DNABERT-S 직접 비교 (Evo 2 결과 확인 후 실행)
+- **목적**: 같은 CAMI2 데이터, 같은 파이프라인(HDBSCAN → Binette → AMBER)에서 임베딩만 교체하여 head-to-head 비교
+- **서버**: PC101 (CPU only) — DNABERT-S는 ~117M 파라미터(BERT 크기)라 GPU 불필요
+- **순서**: DNABERT-S 임베딩 추출 (CPU, ~수시간~하루) → 동일 HDBSCAN → `dnaberts_c2b.tsv` → Binette 5-binner → AMBER
+- **참고**: DNABERT-S 공식 CAMI2 ARI ~54 — 우리 재현 결과와 교차 검증
 
 ## Current Status (2026-03-20 20:00 KST 기준)
 
