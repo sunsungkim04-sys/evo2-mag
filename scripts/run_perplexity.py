@@ -6,9 +6,12 @@ Windows with perplexity >2σ above the bin mean are flagged as potential
 contamination (chimeric regions).
 
 Usage (on RunPod, after run_embed.py):
-    python /workspace/scripts/run_perplexity.py \
+    python3 -u /workspace/scripts/run_perplexity.py \
         --data_dir /workspace/data \
         --output_dir /workspace/results
+
+Optimized: 50kb window / 25kb step + batch processing → ~5-8hr on H100
+(was: 10kb/5kb single pass → ~90hr)
 """
 import argparse
 import glob
@@ -20,14 +23,14 @@ import torch
 from Bio import SeqIO
 
 
-def compute_perplexity_windows(model, sequence, window_size=10000, step_size=5000):
+def compute_perplexity_windows(model, sequence, window_size=50000, step_size=25000, batch_size=4):
     """Compute per-window perplexity using Evo 2 log-likelihoods.
 
     Args:
         model: Evo2 model instance
         sequence: DNA string (ACGT only)
-        window_size: sliding window size in bp (default 10kb)
-        step_size: step size in bp (default 5kb)
+        window_size: sliding window size in bp (default 50kb)
+        step_size: step size in bp (default 25kb)
 
     Returns:
         windows: list of (start, end, perplexity) tuples
@@ -36,20 +39,58 @@ def compute_perplexity_windows(model, sequence, window_size=10000, step_size=500
     windows = []
 
     if len(sequence) < window_size:
-        # Sequence too short for windowing, compute single perplexity
         ppl = _single_perplexity(model, sequence)
         if ppl is not None:
             windows.append((0, len(sequence), ppl))
         return windows
 
+    # Collect all window subsequences
+    spans = []
     for start in range(0, len(sequence) - window_size + 1, step_size):
         end = start + window_size
-        subseq = sequence[start:end]
-        ppl = _single_perplexity(model, subseq)
+        spans.append((start, end, sequence[start:end]))
+
+    # Batch forward passes
+    ppls = _batch_perplexity(model, [s[2] for s in spans], batch_size=batch_size)
+    for (start, end, _), ppl in zip(spans, ppls):
         if ppl is not None:
             windows.append((start, end, ppl))
 
     return windows
+
+
+def _batch_perplexity(model, seqs, batch_size=4):
+    """Compute perplexity for multiple sequences in batches."""
+    results = []
+    loss_fn = torch.nn.CrossEntropyLoss()
+
+    for i in range(0, len(seqs), batch_size):
+        batch = seqs[i:i + batch_size]
+        batch_ppls = []
+        with torch.no_grad():
+            for seq in batch:
+                try:
+                    input_ids = torch.tensor(
+                        model.tokenizer.tokenize(seq), dtype=torch.long
+                    ).unsqueeze(0).to("cuda:0")
+
+                    logits, _ = model(input_ids, return_embeddings=False, layer_names=[])
+
+                    shift_logits = logits[:, :-1, :].contiguous()
+                    shift_labels = input_ids[:, 1:].contiguous()
+
+                    loss = loss_fn(
+                        shift_logits.view(-1, shift_logits.size(-1)),
+                        shift_labels.view(-1),
+                    )
+                    batch_ppls.append(torch.exp(loss).item())
+                except Exception as e:
+                    print(f"    Warning: perplexity computation failed: {e}")
+                    batch_ppls.append(None)
+
+        results.extend(batch_ppls)
+
+    return results
 
 
 def _single_perplexity(model, seq):
@@ -57,43 +98,22 @@ def _single_perplexity(model, seq):
     try:
         with torch.no_grad():
             input_ids = torch.tensor(
-                model.tokenizer.tokenize(seq), dtype=torch.int
+                model.tokenizer.tokenize(seq), dtype=torch.long
             ).unsqueeze(0).to("cuda:0")
 
-            # Get logits (first return value)
             logits, _ = model(input_ids, return_embeddings=False, layer_names=[])
 
-            # Compute cross-entropy loss
             shift_logits = logits[:, :-1, :].contiguous()
-            shift_labels = input_ids[:, 1:].long().contiguous()
+            shift_labels = input_ids[:, 1:].contiguous()
 
             loss_fn = torch.nn.CrossEntropyLoss()
             loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
             perplexity = torch.exp(loss).item()
 
-        torch.cuda.empty_cache()
         return perplexity
     except Exception as e:
         print(f"    Warning: perplexity computation failed: {e}")
         return None
-
-
-def detect_chimeras(windows, sigma_threshold=2.0):
-    """Flag windows with perplexity > mean + sigma_threshold * std."""
-    if len(windows) < 3:
-        return []
-
-    ppls = [w[2] for w in windows]
-    mean_ppl = np.mean(ppls)
-    std_ppl = np.std(ppls)
-    threshold = mean_ppl + sigma_threshold * std_ppl
-
-    flagged = []
-    for start, end, ppl in windows:
-        if ppl > threshold:
-            flagged.append((start, end, ppl, mean_ppl, threshold))
-
-    return flagged
 
 
 def main():
@@ -102,8 +122,9 @@ def main():
                         help="Directory with baseline_sample*/results/bins/*.fa")
     parser.add_argument("--output_dir", default="/workspace/results")
     parser.add_argument("--model", default="evo2_7b")
-    parser.add_argument("--window_size", type=int, default=10000, help="Window size in bp")
-    parser.add_argument("--step_size", type=int, default=5000, help="Step size in bp")
+    parser.add_argument("--window_size", type=int, default=50000, help="Window size in bp")
+    parser.add_argument("--step_size", type=int, default=25000, help="Step size in bp")
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch size for forward passes")
     parser.add_argument("--sigma", type=float, default=2.0, help="Sigma threshold for flagging")
     args = parser.parse_args()
 
@@ -125,16 +146,41 @@ def main():
     out_windows = os.path.join(args.output_dir, "perplexity_windows.tsv")
     out_chimeras = os.path.join(args.output_dir, "chimera_candidates.tsv")
 
+    # Resume support: check which bins are already done
+    done_bins = set()
+    if os.path.exists(out_windows):
+        with open(out_windows) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("bin\t"):
+                    continue
+                parts = line.split("\t")
+                if len(parts) >= 5:  # valid line has 5 columns
+                    done_bins.add(parts[0])
+        print(f"Resuming: {len(done_bins)} bins already processed, skipping")
+        append_mode = True
+    else:
+        append_mode = False
+
     total_flagged = 0
     total_windows = 0
+    t_start = time.time()
 
-    with open(out_windows, "w") as fw, open(out_chimeras, "w") as fc:
-        fw.write("bin\tcontig\tstart\tend\tperplexity\n")
-        fc.write("bin\tcontig\tstart\tend\tperplexity\tmean_ppl\tthreshold\n")
+    mode = "a" if append_mode else "w"
+    with open(out_windows, mode) as fw, open(out_chimeras, mode) as fc:
+        if not append_mode:
+            fw.write("bin\tcontig\tstart\tend\tperplexity\n")
+            fc.write("bin\tcontig\tstart\tend\tperplexity\tmean_ppl\tthreshold\n")
 
         for i, bin_file in enumerate(bin_files):
             bin_name = os.path.splitext(os.path.basename(bin_file))[0]
+
+            if bin_name in done_bins:
+                print(f"[{i+1}/{len(bin_files)}] {bin_name}: skipped (already done)")
+                continue
+
             records = list(SeqIO.parse(bin_file, "fasta"))
+            t_bin = time.time()
             print(f"\n[{i+1}/{len(bin_files)}] {bin_name}: {len(records)} contigs")
 
             bin_all_windows = []
@@ -142,11 +188,14 @@ def main():
             for rec in records:
                 seq = str(rec.seq)
                 windows = compute_perplexity_windows(
-                    model, seq, args.window_size, args.step_size
+                    model, seq, args.window_size, args.step_size, args.batch_size
                 )
                 for start, end, ppl in windows:
                     fw.write(f"{bin_name}\t{rec.id}\t{start}\t{end}\t{ppl:.4f}\n")
                     bin_all_windows.append((rec.id, start, end, ppl))
+
+            # Flush after each bin for crash safety
+            fw.flush()
 
             # Detect chimeras within this bin
             if bin_all_windows:
@@ -162,8 +211,12 @@ def main():
                         total_flagged += 1
                         bin_flagged += 1
 
+                fc.flush()
                 total_windows += len(bin_all_windows)
-                print(f"  {len(bin_all_windows)} windows, {bin_flagged} flagged (threshold={threshold:.2f})")
+                elapsed = time.time() - t_bin
+                total_elapsed = time.time() - t_start
+                print(f"  {len(bin_all_windows)} windows, {bin_flagged} flagged "
+                      f"(threshold={threshold:.2f}) [{elapsed:.0f}s, total {total_elapsed/3600:.1f}h]")
 
     print(f"\nDone! {total_windows} total windows, {total_flagged} chimera candidates")
     print(f"Saved: {out_windows}")
@@ -171,6 +224,5 @@ def main():
 
 
 if __name__ == "__main__":
-    import torch
     torch.serialization.add_safe_globals([__import__("codecs").encode])
     main()

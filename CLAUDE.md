@@ -119,19 +119,19 @@ Revert after CAMI2 experiments.
 
 **RunPod → PC101 SSH 설정 완료**: RunPod에서 `ssh -p 8375 minseo1101@155.230.164.215` 가능 (ed25519 키 등록됨)
 
-### Phase 3b — Perplexity 키메라 탐지 ⏳ 최적화 필요
+### Phase 3b — Perplexity 키메라 탐지 ✅ 최적화 완료
 
-**문제**: 현재 `run_perplexity.py`는 10kb window / 5kb step → ~162,000 forward passes → **~90시간, ~$153**
-**해결 방향**:
-- window 50kb / step 25kb로 확대 → ~18시간, ~$31
-- 배치 처리 추가 시 → ~5-8시간, ~$10-14
-- 키메라 경계는 보통 수십kb 단위라 50kb window로 충분
-- **임베딩+클러스터링 완료 후 RunPod 일단 종료 → 스크립트 최적화 → 다시 실행**
+**최적화 내용** (3/20):
+- window 10kb → **50kb**, step 5kb → **25kb** (forward pass ~9배 감소)
+- 배치 처리 추가 (`--batch_size 4`)
+- `dtype=torch.int` → `torch.long` 버그 수정
+- 중간 저장 (bin별 flush) + resume 지원 (크래시 후 재실행 시 자동 이어서 처리)
+- 예상: **~5-8시간, ~$10-14** (기존 ~90시간/$153)
 
 ### Phase 3 자동 파이프라인 (임베딩 완료 후 자동 실행)
 1. ✅ HDBSCAN 클러스터링 (`run_cluster.py`) → `evo2_c2b.tsv` + `evo2_bins/`
-2. ✅ 결과 PC101 백업 (scp, 실패해도 RunPod에 파일 남음)
-3. ❌ perplexity → 별도 최적화 후 실행
+2. ✅ Perplexity 키메라 탐지 (`run_perplexity.py`) → `perplexity_windows.tsv` + `chimera_candidates.tsv`
+3. ✅ 결과 PC101 백업 (scp, 실패해도 RunPod에 파일 남음)
 
 ### Phase 3 RunPod 경로
 ```
