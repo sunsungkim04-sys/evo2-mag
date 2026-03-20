@@ -148,8 +148,26 @@ Revert after CAMI2 experiments.
 3. Evo2 bins 필터링 0개 → BioPython 없어서 조용히 실패 → 설치 후 해결
 4. sample_10 binning 실패 → np_map_ident=95 (config sed 패턴 불일치로 80 적용 안 됨) → 수동 재실행
 
-### Phase 4 — AMBER 평가 ⏳ 대기
-- sample_10 완료 후 전체 21개 샘플로 Baseline A vs Enhanced B 정량 비교
+### Phase 4 — CheckM2 + AMBER 평가 ✅ 완료
+
+**CheckM2 결과** (Enhanced 169 bins):
+- HQ (≥90% comp, <5% cont): 45
+- MQ (≥50% comp, <10% cont): 88
+- LQ: 36
+- Baseline 비교: HQ 52→45 (-7), MQ 79→88 (+9), total 131→169 (+38)
+
+**AMBER 결과** (21 samples, ground truth 비교):
+| Metric | Baseline | Enhanced | 변화 |
+|--------|----------|----------|------|
+| Precision (bp) | 0.8586 | 0.8442 | -1.4% |
+| Recall (bp) | 0.1363 | 0.1603 | **+17.6%** |
+| F1 (bp) | 0.6614 | 0.6634 | +0.3% |
+| ARI (bp) | 0.7639 | 0.7495 | -1.9% |
+| Assigned (bp) | 0.5822 | 0.5922 | +1.7% |
+
+**결론**: Evo2 추가로 recall 17.6% 향상 (더 많은 contig 할당), precision 소폭 하락 (-1.4%)
+- Gold standard: reads_mapping.tsv (read→genome) + BAM (read→contig) → majority vote
+- 결과 경로: `~/results/amber_eval/amber_output/`
 
 ## GitHub
 
