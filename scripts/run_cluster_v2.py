@@ -43,7 +43,7 @@ def load_sample_contigs(data_dir, sample_name):
 
 def cluster_sample(sample_name, indices, embeddings, names, min_cluster_size, min_samples,
                    umap_neighbors, umap_components, min_contig_len, contig_lengths,
-                   min_prob=0.0):
+                   min_prob=0.0, metric="euclidean"):
     """단일 샘플에 대해 UMAP + HDBSCAN 클러스터링 수행."""
     # 1kb 필터링
     if min_contig_len > 0 and contig_lengths is not None:
@@ -63,6 +63,12 @@ def cluster_sample(sample_name, indices, embeddings, names, min_cluster_size, mi
     # Z-score 정규화
     scaler = StandardScaler()
     emb_norm = scaler.fit_transform(emb)
+
+    # Cosine: L2-normalize → euclidean (수학적으로 cosine distance와 동일)
+    if metric == "cosine":
+        norms = np.linalg.norm(emb_norm, axis=1, keepdims=True)
+        norms[norms == 0] = 1
+        emb_norm = emb_norm / norms
 
     # UMAP
     n_neighbors = min(umap_neighbors, len(filtered_indices) - 1)
@@ -132,6 +138,8 @@ def main():
     parser.add_argument("--min_contig_len", type=int, default=1000, help="최소 contig 길이 (bp)")
     parser.add_argument("--min_prob", type=float, default=0.0,
                         help="HDBSCAN 최소 소속 확률 (0=필터 없음, 0.5 추천)")
+    parser.add_argument("--metric", default="euclidean",
+                        help="Distance metric: euclidean or cosine (L2-norm + euclidean)")
     parser.add_argument("--suffix", default="v2",
                         help="출력 파일 접미사 (evo2_c2b_{suffix}.tsv, evo2_bins_{suffix}/)")
     args = parser.parse_args()
@@ -173,7 +181,8 @@ def main():
     print(f"  HDBSCAN: min_cluster_size={args.min_cluster_size}, min_samples={args.min_samples}, leaf")
     print(f"  UMAP: n_neighbors={args.umap_neighbors}, n_components={args.umap_components}, min_dist=0.0")
     print(f"  최소 contig 길이: {args.min_contig_len}bp")
-    print(f"  최소 소속 확률: {args.min_prob}\n")
+    print(f"  최소 소속 확률: {args.min_prob}")
+    print(f"  Distance metric: {args.metric}\n")
 
     all_assignments = {}
     total_filtered = 0
@@ -193,6 +202,7 @@ def main():
             min_contig_len=args.min_contig_len,
             contig_lengths=contig_lengths,
             min_prob=args.min_prob,
+            metric=args.metric,
         )
         all_assignments.update(assignments)
         total_filtered += n_filtered

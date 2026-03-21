@@ -53,7 +53,7 @@ def load_coverage(data_dir, sample_name):
 
 def cluster_sample(sample_name, indices, embeddings, names, coverage,
                    min_cluster_size, min_samples, umap_neighbors, umap_components,
-                   min_contig_len, contig_lengths, min_prob, cov_weight):
+                   min_contig_len, contig_lengths, min_prob, cov_weight, metric="euclidean"):
     """Evo2 임베딩 + coverage 결합 후 UMAP + HDBSCAN."""
     # 1kb 필터링
     if min_contig_len > 0 and contig_lengths is not None:
@@ -73,6 +73,12 @@ def cluster_sample(sample_name, indices, embeddings, names, coverage,
     # Z-score 정규화
     scaler_emb = StandardScaler()
     emb_norm = scaler_emb.fit_transform(emb)
+
+    # Cosine: L2-normalize → euclidean (수학적으로 cosine distance와 동일)
+    if metric == "cosine":
+        norms = np.linalg.norm(emb_norm, axis=1, keepdims=True)
+        norms[norms == 0] = 1
+        emb_norm = emb_norm / norms
 
     # Coverage 결합
     n_with_cov = 0
@@ -161,6 +167,8 @@ def main():
     parser.add_argument("--min_prob", type=float, default=0.0)
     parser.add_argument("--cov_weight", type=float, default=0.5,
                         help="커버리지 가중치 (0=임베딩만, 0.5=기본, 1.0=강하게)")
+    parser.add_argument("--metric", default="euclidean",
+                        help="Distance metric: euclidean or cosine (L2-norm + euclidean)")
     parser.add_argument("--suffix", default="v4")
     args = parser.parse_args()
 
@@ -197,7 +205,7 @@ def main():
         print(f"  {sample_name}: {len(contigs_db)} contigs, {len(cov)} coverage entries")
 
     # 클러스터링
-    print(f"\n=== 클러스터링 시작 (cov_weight={args.cov_weight}) ===\n")
+    print(f"\n=== 클러스터링 시작 (cov_weight={args.cov_weight}, metric={args.metric}) ===\n")
 
     all_assignments = {}
     total_filtered = 0
@@ -219,6 +227,7 @@ def main():
             contig_lengths=contig_lengths,
             min_prob=args.min_prob,
             cov_weight=args.cov_weight,
+            metric=args.metric,
         )
         all_assignments.update(assignments)
         total_filtered += n_filtered

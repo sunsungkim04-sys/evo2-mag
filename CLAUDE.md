@@ -141,11 +141,44 @@ Revert after CAMI2 experiments.
 - `evo2_c2b_v4.tsv` + `evo2_bins_v4/`
 - 스크립트: `run_cluster_v2_cov.py`
 
-### Phase 3c — Perplexity 키메라 탐지 ✅ 완료
+### Phase 3c — Perplexity 키메라 탐지 ✅ 완료 (정량 검증 필요)
 - 131 bins, 5351 windows 분석, **237개 키메라 후보** flagged
 - window 8kb / step 4kb, batch_size 1 (OOM 방지)
 - `perplexity_windows.tsv` + `chimera_candidates.tsv`
 - 실행 중 발견된 이슈: 50kb window → CUDA OOM → 8kb로 축소, model output unpacking 버그 수정
+
+**⚠️ 현재 문제: 237개 후보만 있고 정량 지표(Precision/Recall/F1)가 없음**
+
+키메라 탐지 정량 검증 방법:
+1. **Gold standard 키메라 정의** (CAMI2 ground truth 활용):
+   - 방법 A: AMBER gold standard에서 2개 이상 genome contig이 섞인 bin = 키메라
+   - 방법 B: CheckM2 contamination >5% bin = 키메라 (marker gene 기반)
+   - 방법 A가 더 정확 (ground truth 기반), B는 참고용
+2. **Evo2 perplexity 237개 vs gold standard 비교**:
+   - `chimera_candidates.tsv`의 bin 목록 vs gold standard 키메라 bin 목록
+   - TP (둘 다 키메라), FP (perplexity만 키메라), FN (gold만 키메라) 산출
+   - Precision = TP/(TP+FP), Recall = TP/(TP+FN), F1
+3. **비교 실험**:
+   - CheckM2 단독 키메라 탐지율 vs CheckM2+Evo2 perplexity 이중 관문
+   - "CheckM2가 못 잡고 Evo2만 잡은 키메라"가 몇 개인지 = 핵심 contribution
+
+**Gold standard 키메라 만드는 법** (PC101에서):
+```python
+# AMBER gold standard (contig → genome 매핑)에서 bin별 genome 구성 확인
+# 1) baseline bins의 contig 목록 로드
+# 2) 각 bin 내 contig들이 몇 개 genome에서 왔는지 카운트
+# 3) 2개 이상 genome → 키메라 bin
+# gold standard: ~/results/amber_eval/gold_standard_baseline_sampleN.tsv
+# bin 정보: ~/results/baseline_sampleN/tmp/binning/round_1/binette/final_bins/*.fa
+```
+
+**출력 지표 (채울 것)**:
+| 지표 | CheckM2 단독 | Evo2 perplexity 단독 | CheckM2 + Evo2 |
+|------|-------------|---------------------|----------------|
+| Precision | ___ | ___ | ___ |
+| Recall | ___ | ___ | ___ |
+| F1 | ___ | ___ | ___ |
+| "CheckM2 못 잡고 Evo2만 잡은 수" | — | ___ | — |
 
 ### Phase 3 결과 (PC101 백업 완료)
 ```
