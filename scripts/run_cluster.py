@@ -21,7 +21,7 @@ import hdbscan
 import numpy as np
 from Bio import SeqIO
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, normalize
 
 
 def load_all_contigs(data_dir):
@@ -46,6 +46,8 @@ def main():
     parser.add_argument("--min_cluster_size", type=int, default=5)
     parser.add_argument("--min_samples", type=int, default=3)
     parser.add_argument("--pca_dim", type=int, default=50, help="PCA dimensions (0=skip)")
+    parser.add_argument("--metric", default="euclidean", help="HDBSCAN distance metric (euclidean, cosine, ...)")
+    parser.add_argument("--suffix", default="", help="Suffix for output files (e.g. '_v1_1')")
     args = parser.parse_args()
 
     # Load embeddings
@@ -72,11 +74,18 @@ def main():
         print(f"  Explained variance: {explained:.1f}%")
 
     # HDBSCAN
-    print(f"Running HDBSCAN (min_cluster_size={args.min_cluster_size}, min_samples={args.min_samples})...")
+    # For cosine metric: L2-normalize then use euclidean (mathematically equivalent)
+    hdbscan_metric = args.metric
+    if args.metric == "cosine":
+        print("L2-normalizing for cosine distance (euclidean on unit vectors)...")
+        embeddings_norm = normalize(embeddings_norm, norm="l2")
+        hdbscan_metric = "euclidean"
+
+    print(f"Running HDBSCAN (min_cluster_size={args.min_cluster_size}, min_samples={args.min_samples}, metric={args.metric})...")
     clusterer = hdbscan.HDBSCAN(
         min_cluster_size=args.min_cluster_size,
         min_samples=args.min_samples,
-        metric="euclidean",
+        metric=hdbscan_metric,
         cluster_selection_method="eom",
         core_dist_n_jobs=-1,
     )
@@ -87,7 +96,7 @@ def main():
     print(f"  {n_clusters} clusters found, {n_noise} noise points ({n_noise / len(labels) * 100:.1f}%)")
 
     # 1) Write contig-to-bin TSV
-    tsv_path = os.path.join(args.output_dir, "evo2_c2b.tsv")
+    tsv_path = os.path.join(args.output_dir, f"evo2_c2b{args.suffix}.tsv")
     os.makedirs(args.output_dir, exist_ok=True)
     with open(tsv_path, "w") as f:
         for name, label in zip(names, labels):
@@ -121,7 +130,7 @@ def main():
     # Write per-sample bin directories
     total_bins = 0
     for sample_name, bins in sorted(sample_bins.items()):
-        bin_dir = os.path.join(args.output_dir, "evo2_bins", sample_name)
+        bin_dir = os.path.join(args.output_dir, f"evo2_bins{args.suffix}", sample_name)
         os.makedirs(bin_dir, exist_ok=True)
         for bin_name, contig_names in bins.items():
             bin_fasta = os.path.join(bin_dir, f"{bin_name}.fa")
@@ -131,7 +140,7 @@ def main():
                 total_bins += 1
 
     print(f"  {total_bins} bin FASTA files written across {len(sample_bins)} samples")
-    print(f"  Output: {os.path.join(args.output_dir, 'evo2_bins/')}")
+    print(f"  Output: {os.path.join(args.output_dir, f'evo2_bins{args.suffix}/')}")
 
 
 if __name__ == "__main__":
