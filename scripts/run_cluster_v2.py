@@ -42,7 +42,8 @@ def load_sample_contigs(data_dir, sample_name):
 
 
 def cluster_sample(sample_name, indices, embeddings, names, min_cluster_size, min_samples,
-                   umap_neighbors, umap_components, min_contig_len, contig_lengths):
+                   umap_neighbors, umap_components, min_contig_len, contig_lengths,
+                   min_prob=0.0):
     """단일 샘플에 대해 UMAP + HDBSCAN 클러스터링 수행."""
     # 1kb 필터링
     if min_contig_len > 0 and contig_lengths is not None:
@@ -88,14 +89,24 @@ def cluster_sample(sample_name, indices, embeddings, names, min_cluster_size, mi
         core_dist_n_jobs=-1,
     )
     labels = clusterer.fit_predict(emb_umap)
+    probabilities = clusterer.probabilities_
+
+    # 확률 필터링: low-confidence 할당 제거
+    n_before_prob = (labels != -1).sum()
+    if min_prob > 0:
+        low_prob_mask = (labels != -1) & (probabilities < min_prob)
+        labels[low_prob_mask] = -1
 
     n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
     n_assigned = (labels != -1).sum()
     n_total = len(labels)
     noise_pct = (labels == -1).sum() / n_total * 100
+    n_prob_filtered = n_before_prob - n_assigned
 
+    prob_info = f", {n_prob_filtered} prob<{min_prob}" if min_prob > 0 else ""
     print(f"  {sample_name}: {n_total} contigs → {n_clusters} clusters, "
-          f"{n_assigned} assigned ({100 - noise_pct:.1f}%), "
+          f"{n_assigned} assigned ({100 - noise_pct:.1f}%)"
+          f"{prob_info}, "
           f"{n_filtered} filtered (<{min_contig_len}bp)")
 
     # 결과 매핑
@@ -119,6 +130,10 @@ def main():
     parser.add_argument("--umap_neighbors", type=int, default=15)
     parser.add_argument("--umap_components", type=int, default=50)
     parser.add_argument("--min_contig_len", type=int, default=1000, help="최소 contig 길이 (bp)")
+    parser.add_argument("--min_prob", type=float, default=0.0,
+                        help="HDBSCAN 최소 소속 확률 (0=필터 없음, 0.5 추천)")
+    parser.add_argument("--suffix", default="v2",
+                        help="출력 파일 접미사 (evo2_c2b_{suffix}.tsv, evo2_bins_{suffix}/)")
     args = parser.parse_args()
 
     # 임베딩 로드
@@ -157,7 +172,8 @@ def main():
     print(f"\n=== 샘플별 클러스터링 시작 ===")
     print(f"  HDBSCAN: min_cluster_size={args.min_cluster_size}, min_samples={args.min_samples}, leaf")
     print(f"  UMAP: n_neighbors={args.umap_neighbors}, n_components={args.umap_components}, min_dist=0.0")
-    print(f"  최소 contig 길이: {args.min_contig_len}bp\n")
+    print(f"  최소 contig 길이: {args.min_contig_len}bp")
+    print(f"  최소 소속 확률: {args.min_prob}\n")
 
     all_assignments = {}
     total_filtered = 0
@@ -176,6 +192,7 @@ def main():
             umap_components=args.umap_components,
             min_contig_len=args.min_contig_len,
             contig_lengths=contig_lengths,
+            min_prob=args.min_prob,
         )
         all_assignments.update(assignments)
         total_filtered += n_filtered
@@ -191,8 +208,8 @@ def main():
     print(f"  총 bins: {total_bins}")
     print(f"  (v1 대비: 6398/{total_contigs} = 15.1%, 403 bins)")
 
-    # 1) evo2_c2b_v2.tsv 저장
-    tsv_path = os.path.join(args.output_dir, "evo2_c2b_v2.tsv")
+    # 1) evo2_c2b_{suffix}.tsv 저장
+    tsv_path = os.path.join(args.output_dir, f"evo2_c2b_{args.suffix}.tsv")
     with open(tsv_path, "w") as f:
         for name in names:
             if name in all_assignments:
@@ -201,7 +218,7 @@ def main():
 
     # 2) 샘플별 bin FASTA 생성
     print("\nBin FASTA 생성 중...")
-    bin_dir_root = os.path.join(args.output_dir, "evo2_bins_v2")
+    bin_dir_root = os.path.join(args.output_dir, f"evo2_bins_{args.suffix}")
     os.makedirs(bin_dir_root, exist_ok=True)
 
     # bin별 contig 그룹핑
