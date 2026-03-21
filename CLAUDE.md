@@ -112,10 +112,22 @@ Revert after CAMI2 experiments.
 - `contig_embeddings.npz` (546MB, 42320×4096d)
 - RunPod H100 SXM 80GB, 총 ~27시간, 비용 ~$46
 
-### Phase 3b — HDBSCAN 클러스터링 ✅ 완료
-- PCA 4096d → 50d (explained variance: 99.9%) + HDBSCAN
-- 403 clusters, 6398/42320 contigs assigned (84.9% noise — 앙상블에서 걸러짐)
-- `evo2_c2b.tsv` + `evo2_bins/` (샘플별 bin FASTA)
+### Phase 3b — HDBSCAN 클러스터링
+
+**v1** (글로벌 PCA+HDBSCAN) ✅ 완료:
+- PCA 4096d → 50d + HDBSCAN (min_cluster_size=5, min_samples=3, eom)
+- 403 clusters, 6398/42320 assigned (15.1%) — 84.9% noise
+- `evo2_c2b.tsv` + `evo2_bins/`
+
+**v2** (샘플별 UMAP+HDBSCAN) ✅ 완료 (3/21):
+- 샘플별 클러스터링 + UMAP 50d + HDBSCAN (min_cluster_size=3, min_samples=1, leaf)
+- 6439 bins, 31030/42320 assigned (**73.3%**) — noise 대폭 감소
+- `evo2_c2b_v2.tsv` + `evo2_bins_v2/`
+
+**v3** (v2 + 확률 필터링 prob≥0.5) ✅ 완료 (3/21):
+- v2와 동일 클러스터링 + low-confidence 할당 제거 (1706개)
+- 6439 bins, 29324/42320 assigned (69.3%)
+- `evo2_c2b_v3.tsv` + `evo2_bins_v3/`
 
 ### Phase 3c — Perplexity 키메라 탐지 ✅ 완료
 - 131 bins, 5351 windows 분석, **237개 키메라 후보** flagged
@@ -133,14 +145,16 @@ Revert after CAMI2 experiments.
 ~/results/chimera_candidates.tsv    # 키메라 후보 (237개)
 ```
 
-### Phase 3d — Binette Enhanced 앙상블 ✅ 20/21 완료, sample_10 🔄 진행 중
+### Phase 3d — Binette Enhanced 앙상블
 - 기존 3종(VAMB+MetaBAT2+SemiBin2) + **Evo2 bins** = 4종 앙상블
-- Singularity 컨테이너 내 Binette 1.1.2 + CheckM2 사용 (PATH=/opt/conda/envs/env_8/bin)
+- Singularity 컨테이너 내 Binette 1.1.2 + CheckM2 (PATH=/opt/conda/envs/env_8/bin)
 - Evo2 bins 필터링 적용 (contigs.fasta에 없는 split contig 제거)
-- **20개 샘플 완료: 총 163 Enhanced bins** (Baseline 131 → +32)
-- sample_10: 원래 np_map_ident=95에서 binning 실패 → 수동으로 np_map_ident=80 재실행 중
-  - minimap2 mapping ✅ → coverage + MetaBAT2 + VAMB + SemiBin2 🔄 진행 중
-  - 완료 후 Binette enhanced 실행 예정
+
+| 버전 | Evo2 bins 소스 | 결과 (total bins) |
+|------|---------------|------------------|
+| v1 | `evo2_bins/` (글로벌) | 169 bins (21 samples) |
+| v2 | `evo2_bins_v2/` (샘플별 UMAP) | 168 bins |
+| v3 | `evo2_bins_v3/` (v2+prob≥0.5) | 164 bins |
 
 ### 실행 중 발견된 이슈 & 해결
 1. BioPython 미설치 → `pip install biopython` (PC101)
@@ -150,24 +164,29 @@ Revert after CAMI2 experiments.
 
 ### Phase 4 — CheckM2 + AMBER 평가 ✅ 완료
 
-**CheckM2 결과** (Enhanced 169 bins):
-- HQ (≥90% comp, <5% cont): 45
-- MQ (≥50% comp, <10% cont): 88
-- LQ: 36
-- Baseline 비교: HQ 52→45 (-7), MQ 79→88 (+9), total 131→169 (+38)
+**CheckM2 결과 비교**:
+| | Baseline | Enhanced v1 | Enhanced v2 | Enhanced v3 |
+|---|---|---|---|---|
+| Total bins | 131 | 169 | 165 | 164 |
+| HQ (≥90% comp, <5% cont) | 52 | 45 | 45 | 45 |
+| MQ (≥50% comp, <10% cont) | 79 | 88 | **94** | 90 |
+| LQ | 0 | 36 | 26 | 29 |
 
-**AMBER 결과** (21 samples, ground truth 비교):
-| Metric | Baseline | Enhanced | 변화 |
-|--------|----------|----------|------|
-| Precision (bp) | 0.8586 | 0.8442 | -1.4% |
-| Recall (bp) | 0.1363 | 0.1603 | **+17.6%** |
-| F1 (bp) | 0.6614 | 0.6634 | +0.3% |
-| ARI (bp) | 0.7639 | 0.7495 | -1.9% |
-| Assigned (bp) | 0.5822 | 0.5922 | +1.7% |
+**AMBER 결과** (21 samples 평균, ground truth 비교):
+| Metric | Baseline | v1 | v2 | v3 |
+|--------|----------|-----|------|------|
+| Precision (bp) | 0.8062 | 0.7923 | 0.7762 | 0.7868 |
+| Recall (bp) | 0.5702 | 0.5795 | 0.5746 | 0.5689 |
+| F1 (bp) | 0.2327 | **0.2658** | 0.2636 | 0.2570 |
+| ARI (bp) | **0.7639** | 0.7495 | 0.7189 | 0.7371 |
+| Assigned (bp) | 0.5822 | **0.5922** | 0.5892 | 0.5828 |
 
-**결론**: Evo2 추가로 recall 17.6% 향상 (더 많은 contig 할당), precision 소폭 하락 (-1.4%)
+**분석**:
+- v1: F1, Recall, Assigned 최고 — 전반적으로 가장 균형 잡힌 결과
+- v2: MQ 최대 (94) — 더 많은 MAG 발견, 하지만 ARI 하락
+- v3: v2 대비 Precision/ARI 회복, MQ 감소 — 확률 필터링 효과 있으나 trade-off
 - Gold standard: reads_mapping.tsv (read→genome) + BAM (read→contig) → majority vote
-- 결과 경로: `~/results/amber_eval/amber_output/`
+- 결과 경로: `~/results/amber_eval/`, `~/results/amber_eval_v2/`, `~/results/amber_eval_v3/`
 
 ## GitHub
 
