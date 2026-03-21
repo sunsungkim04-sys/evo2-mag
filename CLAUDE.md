@@ -99,7 +99,7 @@ Revert after CAMI2 experiments.
 - **순서**: DNABERT-S 임베딩 추출 (CPU, ~수시간~하루) → 동일 HDBSCAN → `dnaberts_c2b.tsv` → Binette 5-binner → AMBER
 - **참고**: DNABERT-S 공식 CAMI2 ARI ~54 — 우리 재현 결과와 교차 검증
 
-## Current Status (2026-03-20 20:00 KST 기준)
+## Current Status (2026-03-21 21:00 KST 기준)
 
 ### Phase 2 — mmlong2 Baseline ✅ 완료
 - 21개 샘플 전부 완료 (3/18 14:13)
@@ -114,10 +114,16 @@ Revert after CAMI2 experiments.
 
 ### Phase 3b — HDBSCAN 클러스터링
 
-**v1** (글로벌 PCA+HDBSCAN) ✅ 완료:
+**v1** (글로벌 PCA+HDBSCAN, euclidean) ✅ 완료:
 - PCA 4096d → 50d + HDBSCAN (min_cluster_size=5, min_samples=3, eom)
 - 403 clusters, 6398/42320 assigned (15.1%) — 84.9% noise
 - `evo2_c2b.tsv` + `evo2_bins/`
+
+**v1-1** (글로벌 PCA+HDBSCAN, cosine) ✅ 완료 (3/21):
+- v1과 동일 파라미터, metric만 cosine (L2-normalize + euclidean으로 구현)
+- 351 clusters, 7564/42320 assigned (17.9%) — v1 대비 assigned 증가
+- `evo2_c2b_v1_1.tsv` + `evo2_bins_v1_1/`
+- run_cluster.py에 `--metric`, `--suffix` 인자 추가
 
 **v2** (샘플별 UMAP+HDBSCAN) ✅ 완료 (3/21):
 - 샘플별 클러스터링 + UMAP 50d + HDBSCAN (min_cluster_size=3, min_samples=1, leaf)
@@ -158,7 +164,8 @@ Revert after CAMI2 experiments.
 
 | 버전 | Evo2 bins 소스 | 결과 (total bins) |
 |------|---------------|------------------|
-| v1 | `evo2_bins/` (글로벌) | 169 bins |
+| v1 | `evo2_bins/` (글로벌, euclidean) | 169 bins |
+| v1-1 | `evo2_bins_v1_1/` (글로벌, cosine) | 167 bins |
 | v2 | `evo2_bins_v2/` (샘플별 UMAP) | 168 bins |
 | v3 | `evo2_bins_v3/` (v2+prob≥0.5) | 164 bins |
 | v4 | `evo2_bins_v4/` (임베딩+커버리지) | **179 bins** |
@@ -172,30 +179,38 @@ Revert after CAMI2 experiments.
 ### Phase 4 — CheckM2 + AMBER 평가 ✅ 완료
 
 **CheckM2 결과 비교**:
-| | Baseline | v1 | v2 | v3 | v4 (cov) |
-|---|---|---|---|---|---|
-| Total bins | 131 | 169 | 165 | 164 | **179** |
-| HQ (≥90% comp, <5% cont) | **52** | 45 | 45 | 45 | 41 |
-| MQ (≥50% comp, <10% cont) | 79 | 88 | 94 | 90 | **99** |
-| LQ | 0 | 36 | 26 | 29 | 39 |
+| | Baseline | v1 | v1-1 (cos) | v2 | v3 | v4 (cov) |
+|---|---|---|---|---|---|---|
+| Total bins | 131 | 169 | 167 | 165 | 164 | **179** |
+| HQ (≥90% comp, <5% cont) | **52** | 45 | 47 | 45 | 45 | 41 |
+| MQ (≥50% comp, <10% cont) | 79 | 88 | 88 | 94 | 90 | **99** |
+| LQ | 0 | 36 | 32 | 26 | 29 | 39 |
 
 **AMBER 결과** (21 samples 평균, ground truth 비교):
-| Metric | Baseline | v1 | v2 | v3 | v4 (cov) |
-|--------|----------|-----|------|------|----------|
-| Precision (bp) | **0.8062** | 0.7923 | 0.7762 | 0.7868 | 0.7696 |
-| Recall (bp) | 0.5702 | 0.5795 | 0.5746 | 0.5689 | **0.5836** |
-| F1 (bp) | 0.2327 | 0.2658 | 0.2636 | 0.2570 | **0.2696** |
-| ARI (bp) | **0.7639** | 0.7495 | 0.7189 | 0.7371 | 0.6896 |
-| Assigned (bp) | 0.5822 | 0.5922 | 0.5892 | 0.5828 | **0.6087** |
+| Metric | Baseline | v1 | v1-1 (cos) | v2 | v3 | v4 (cov) |
+|--------|----------|-----|------------|------|------|----------|
+| Precision (bp) | **0.8062** | 0.7923 | 0.7619 | 0.7762 | 0.7868 | 0.7696 |
+| Recall (bp) | 0.5702 | 0.5795 | 0.5811 | 0.5746 | 0.5689 | **0.5836** |
+| F1 (bp) | 0.2327 | 0.2658 | **0.2820** | 0.2636 | 0.2570 | 0.2696 |
+| ARI (bp) | **0.7639** | 0.7495 | 0.6927 | 0.7189 | 0.7371 | 0.6896 |
+| Assigned (bp) | 0.5822 | 0.5922 | 0.5978 | 0.5892 | 0.5828 | **0.6087** |
 
 **분석**:
 - v1: ARI 최고 (0.7495) — 전반적으로 가장 균형 잡힌 결과
+- **v1-1 (cosine)**: F1 **0.2820** (최고), HQ 47 (enhanced 중 최고), LQ 32 (enhanced 중 최소). 단 ARI 0.6927
 - v2: MQ 94 — 더 많은 MAG 발견, ARI 하락
 - v3: v2 대비 Precision/ARI 회복, MQ 감소 — 확률 필터링 효과 있으나 trade-off
-- **v4 (커버리지 결합)**: MQ **99** (최고), F1 **0.2696** (최고), Recall/Assigned 최고. 단 ARI 0.6896으로 가장 낮음
-- 결론: bin 발견 최대화 → v4, 정확도 우선 → v1, 절충안 → v2
+- **v4 (커버리지 결합)**: MQ **99** (최고), Recall/Assigned 최고. 단 ARI 0.6896으로 가장 낮음
+- 결론: F1 최고 → v1-1, bin 발견 최대화 → v4, 정확도 우선 → v1, 절충안 → v2
 - Gold standard: reads_mapping.tsv (read→genome) + BAM (read→contig) → majority vote
-- 결과 경로: `~/results/amber_eval/`, `~/results/amber_eval_v2/`, `~/results/amber_eval_v3/`, `~/results/amber_eval_v4/`
+- 결과 경로: `~/results/amber_eval/`, `~/results/amber_eval_v1_1/`, `~/results/amber_eval_v2/`, `~/results/amber_eval_v3/`, `~/results/amber_eval_v4/`
+
+### Phase 5 — Bakta 기능 주석 ✅ 완료 (3/21)
+- Enhanced v1 bins (163개) Bakta v1.11.4 annotation 완료
+- Total CDS: 1,441,872 / Hypothetical: 709,610 / Functional: 732,262
+- **Functional ratio: 50.8%** (Bakta는 strict evidence-based, Prokka보다 보수적)
+- 결과: `~/results/bakta_enhanced/bin_*/` (GFF3, TSV, FAA 등)
+- 버그 수정: bakta TSV에서 CDS 소문자(`cds`), hypothetical 컬럼 $8 (기존 스크립트는 대문자+$7)
 
 ## GitHub
 
