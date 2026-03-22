@@ -151,44 +151,28 @@ Revert after CAMI2 experiments.
 - 6656 bins, ~78% assigned
 - `evo2_c2b_v4_1.tsv` + `evo2_bins_v4_1/`
 
-### Phase 3c — Perplexity 키메라 탐지 ✅ 완료 (정량 검증 필요)
-- 131 bins, 5351 windows 분석, **237개 키메라 후보** flagged
-- window 8kb / step 4kb, batch_size 1 (OOM 방지)
-- `perplexity_windows.tsv` + `chimera_candidates.tsv`
-- 실행 중 발견된 이슈: 50kb window → CUDA OOM → 8kb로 축소, model output unpacking 버그 수정
+### Phase 3c — Perplexity 키메라 탐지 ✅ 정량 검증 완료 (3/22)
+- 131 bins, **195,266 windows** 분석, **10,407개 키메라 후보** flagged
+- window 8kb / step 4kb, batch_size 1 (H100, ~19.7시간)
+- True chimeras (gold standard, ≥2 genomes): **32/131 bins (24.4%)**
+- 스크립트: `run_perplexity.py` (RunPod) + `validate_chimera.py` (PC101)
+- 출력: `perplexity_windows.tsv`, `chimera_candidates.tsv`, `chimera_validation_summary.txt`, `chimera_validation_detail.tsv`
 
-**⚠️ 현재 문제: 237개 후보만 있고 정량 지표(Precision/Recall/F1)가 없음**
+**정량 검증 결과** (CAMI2 gold standard 대비):
 
-키메라 탐지 정량 검증 방법:
-1. **Gold standard 키메라 정의** (CAMI2 ground truth 활용):
-   - 방법 A: AMBER gold standard에서 2개 이상 genome contig이 섞인 bin = 키메라
-   - 방법 B: CheckM2 contamination >5% bin = 키메라 (marker gene 기반)
-   - 방법 A가 더 정확 (ground truth 기반), B는 참고용
-2. **Evo2 perplexity 237개 vs gold standard 비교**:
-   - `chimera_candidates.tsv`의 bin 목록 vs gold standard 키메라 bin 목록
-   - TP (둘 다 키메라), FP (perplexity만 키메라), FN (gold만 키메라) 산출
-   - Precision = TP/(TP+FP), Recall = TP/(TP+FN), F1
-3. **비교 실험**:
-   - CheckM2 단독 키메라 탐지율 vs CheckM2+Evo2 perplexity 이중 관문
-   - "CheckM2가 못 잡고 Evo2만 잡은 키메라"가 몇 개인지 = 핵심 contribution
+| 지표 | CheckM2 단독 (>5%) | Evo2 perplexity (any flag) | Evo2 ratio>5% |
+|------|---------------------|---------------------------|---------------|
+| Precision | 0.3333 | 0.2443 | 0.2619 |
+| Recall | 0.0625 | **1.0000** | 0.6875 |
+| F1 | 0.1053 | **0.3926** | 0.3793 |
+| "CheckM2 못 잡고 Evo2만 잡은 수" | — | **30** | 20 |
 
-**Gold standard 키메라 만드는 법** (PC101에서):
-```python
-# AMBER gold standard (contig → genome 매핑)에서 bin별 genome 구성 확인
-# 1) baseline bins의 contig 목록 로드
-# 2) 각 bin 내 contig들이 몇 개 genome에서 왔는지 카운트
-# 3) 2개 이상 genome → 키메라 bin
-# gold standard: ~/results/amber_eval/gold_standard_baseline_sampleN.tsv
-# bin 정보: ~/results/baseline_sampleN/tmp/binning/round_1/binette/final_bins/*.fa
-```
-
-**출력 지표 (채울 것)**:
-| 지표 | CheckM2 단독 | Evo2 perplexity 단독 | CheckM2 + Evo2 |
-|------|-------------|---------------------|----------------|
-| Precision | ___ | ___ | ___ |
-| Recall | ___ | ___ | ___ |
-| F1 | ___ | ___ | ___ |
-| "CheckM2 못 잡고 Evo2만 잡은 수" | — | ___ | — |
+**분석**:
+- CheckM2는 contamination >5% 기준으로 32개 true chimera 중 **2개만 탐지** (Recall 6.3%)
+- Evo2 perplexity는 **모든 true chimera를 탐지** (Recall 100%) — high-recall 스크리닝 도구로 유효
+- 단, 모든 131 bins에서 최소 1개 window가 flagged → Precision 24.4% (FP 99개)
+- flagged ratio >5% 기준 적용 시 Recall 68.8%로 하락하지만 일부 precision 개선
+- **핵심 contribution**: CheckM2가 놓친 low-contamination chimera 30개를 Evo2가 추가 탐지 (checkm2_cont 0.00%~4.72% 범위)
 
 ### Phase 3 결과 (PC101 백업 완료)
 ```

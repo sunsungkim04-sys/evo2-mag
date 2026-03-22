@@ -10,8 +10,8 @@ Usage (on RunPod, after run_embed.py):
         --data_dir /workspace/data \
         --output_dir /workspace/results
 
-Optimized: 50kb window / 25kb step + batch processing → ~5-8hr on H100
-(was: 10kb/5kb single pass → ~90hr)
+Default: 8kb window / 4kb step, batch_size=1 (OOM-safe on H100 80GB)
+50kb/25kb was tried but caused CUDA OOM → 8kb로 축소.
 """
 import argparse
 import glob
@@ -96,28 +96,9 @@ def _batch_perplexity(model, seqs, batch_size=4):
 
 
 def _single_perplexity(model, seq):
-    """Compute perplexity for a single sequence."""
-    try:
-        with torch.no_grad():
-            input_ids = torch.tensor(
-                model.tokenizer.tokenize(seq), dtype=torch.long
-            ).unsqueeze(0).to("cuda:0")
-
-            (logits, _), _ = model(input_ids, return_embeddings=False, layer_names=[])
-
-            shift_logits = logits[:, :-1, :].contiguous()
-            shift_labels = input_ids[:, 1:].contiguous()
-
-            loss_fn = torch.nn.CrossEntropyLoss()
-            loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-            perplexity = torch.exp(loss).item()
-            del input_ids, logits, shift_logits, shift_labels, loss
-
-        torch.cuda.empty_cache()
-        return perplexity
-    except Exception as e:
-        print(f"    Warning: perplexity computation failed: {e}")
-        return None
+    """Compute perplexity for a single sequence (delegates to _batch_perplexity)."""
+    results = _batch_perplexity(model, [seq], batch_size=1)
+    return results[0] if results else None
 
 
 def main():
