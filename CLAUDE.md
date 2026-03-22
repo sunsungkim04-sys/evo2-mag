@@ -99,7 +99,7 @@ Revert after CAMI2 experiments.
 - **순서**: DNABERT-S 임베딩 추출 (CPU, ~수시간~하루) → 동일 HDBSCAN → `dnaberts_c2b.tsv` → Binette 5-binner → AMBER
 - **참고**: DNABERT-S 공식 CAMI2 ARI ~54 — 우리 재현 결과와 교차 검증
 
-## Current Status (2026-03-21 21:00 KST 기준)
+## Current Status (2026-03-22 09:30 KST 기준)
 
 ### Phase 2 — mmlong2 Baseline ✅ 완료
 - 21개 샘플 전부 완료 (3/18 14:13)
@@ -140,6 +140,16 @@ Revert after CAMI2 experiments.
 - 6338 bins, 31089/42320 assigned (73.5%)
 - `evo2_c2b_v4.tsv` + `evo2_bins_v4/`
 - 스크립트: `run_cluster_v2_cov.py`
+
+**v2_1** (v2 + cosine metric) ✅ 완료 (3/22):
+- v2와 동일 (샘플별 UMAP+HDBSCAN) + cosine distance (L2-normalize + euclidean)
+- 6623 bins, ~77% assigned
+- `evo2_c2b_v2_1.tsv` + `evo2_bins_v2_1/`
+
+**v4_1** (v4 + cosine metric) ✅ 완료 (3/22):
+- v4와 동일 (임베딩+커버리지) + cosine distance (임베딩만 L2-norm, 커버리지는 별도 z-score)
+- 6656 bins, ~78% assigned
+- `evo2_c2b_v4_1.tsv` + `evo2_bins_v4_1/`
 
 ### Phase 3c — Perplexity 키메라 탐지 ✅ 완료 (정량 검증 필요)
 - 131 bins, 5351 windows 분석, **237개 키메라 후보** flagged
@@ -202,6 +212,8 @@ Revert after CAMI2 experiments.
 | v2 | `evo2_bins_v2/` (샘플별 UMAP) | 168 bins |
 | v3 | `evo2_bins_v3/` (v2+prob≥0.5) | 164 bins |
 | v4 | `evo2_bins_v4/` (임베딩+커버리지) | **179 bins** |
+| v2_1 | `evo2_bins_v2_1/` (v2+cosine) | 166 bins |
+| v4_1 | `evo2_bins_v4_1/` (v4+cosine) | 163 bins |
 
 ### 실행 중 발견된 이슈 & 해결
 1. BioPython 미설치 → `pip install biopython` (PC101)
@@ -212,21 +224,21 @@ Revert after CAMI2 experiments.
 ### Phase 4 — CheckM2 + AMBER 평가 ✅ 완료
 
 **CheckM2 결과 비교**:
-| | Baseline | v1 | v1-1 (cos) | v2 | v3 | v4 (cov) |
-|---|---|---|---|---|---|---|
-| Total bins | 131 | 169 | 167 | 165 | 164 | **179** |
-| HQ (≥90% comp, <5% cont) | **52** | 45 | 47 | 45 | 45 | 41 |
-| MQ (≥50% comp, <10% cont) | 79 | 88 | 88 | 94 | 90 | **99** |
-| LQ | 0 | 36 | 32 | 26 | 29 | 39 |
+| | Baseline | v1 | v1-1 (cos) | v2 | v3 | v4 (cov) | v2_1 (cos) | v4_1 (cov+cos) |
+|---|---|---|---|---|---|---|---|---|
+| Total bins | 131 | 169 | 167 | 165 | 164 | **179** | 166 | 163 |
+| HQ (≥90% comp, <5% cont) | **52** | 45 | 47 | 45 | 45 | 41 | 47 | 47 |
+| MQ (≥50% comp, <10% cont) | 79 | 88 | 88 | 94 | 90 | **99** | 87 | 85 |
+| LQ | 0 | 36 | 32 | 26 | 29 | 39 | 32 | 31 |
 
 **AMBER 결과** (21 samples 평균, ground truth 비교):
-| Metric | Baseline | v1 | v1-1 (cos) | v2 | v3 | v4 (cov) |
-|--------|----------|-----|------------|------|------|----------|
-| Precision (bp) | **0.8062** | 0.7923 | 0.7619 | 0.7762 | 0.7868 | 0.7696 |
-| Recall (bp) | 0.5702 | 0.5795 | 0.5811 | 0.5746 | 0.5689 | **0.5836** |
-| F1 (bp) | 0.2327 | 0.2658 | **0.2820** | 0.2636 | 0.2570 | 0.2696 |
-| ARI (bp) | **0.7639** | 0.7495 | 0.6927 | 0.7189 | 0.7371 | 0.6896 |
-| Assigned (bp) | 0.5822 | 0.5922 | 0.5978 | 0.5892 | 0.5828 | **0.6087** |
+| Metric | Baseline | v1 | v1-1 (cos) | v2 | v3 | v4 (cov) | v2_1 (cos) | v4_1 (cov+cos) |
+|--------|----------|-----|------------|------|------|----------|---|---|
+| Precision (bp) | **0.8062** | 0.7923 | 0.7619 | 0.7762 | 0.7868 | 0.7696 | 0.7803 | 0.7855 |
+| Recall (bp) | 0.5702 | 0.5795 | 0.5811 | 0.5746 | 0.5689 | **0.5836** | 0.5724 | 0.5622 |
+| F1 (bp) | 0.2327 | 0.2658 | **0.2820** | 0.2636 | 0.2570 | 0.2696 | 0.2576 | 0.2634 |
+| ARI (bp) | **0.7639** | 0.7495 | 0.6927 | 0.7189 | 0.7371 | 0.6896 | 0.7227 | 0.7334 |
+| Assigned (bp) | 0.5822 | 0.5922 | 0.5978 | 0.5892 | 0.5828 | **0.6087** | 0.5887 | 0.5783 |
 
 **분석**:
 - v1: ARI 최고 (0.7495) — 전반적으로 가장 균형 잡힌 결과
@@ -234,9 +246,12 @@ Revert after CAMI2 experiments.
 - v2: MQ 94 — 더 많은 MAG 발견, ARI 하락
 - v3: v2 대비 Precision/ARI 회복, MQ 감소 — 확률 필터링 효과 있으나 trade-off
 - **v4 (커버리지 결합)**: MQ **99** (최고), Recall/Assigned 최고. 단 ARI 0.6896으로 가장 낮음
-- 결론: F1 최고 → v1-1, bin 발견 최대화 → v4, 정확도 우선 → v1, 절충안 → v2
+- **v2_1 (v2+cosine)**: HQ 47 (v1-1과 동률), ARI 0.7227 (v2 대비 유사)
+- **v4_1 (v4+cosine)**: HQ 47, ARI **0.7334** (v4 대비 +0.04 개선!), Precision 0.7855 (v4 대비 개선)
+- cosine metric은 HQ를 47로 일관되게 끌어올림 (v1→v1-1, v2→v2_1, v4→v4_1 모두)
+- 결론: F1 최고 → v1-1, bin 발견 최대화 → v4, 정확도+ARI → v4_1, 절충안 → v2
 - Gold standard: reads_mapping.tsv (read→genome) + BAM (read→contig) → majority vote
-- 결과 경로: `~/results/amber_eval/`, `~/results/amber_eval_v1_1/`, `~/results/amber_eval_v2/`, `~/results/amber_eval_v3/`, `~/results/amber_eval_v4/`
+- 결과 경로: `~/results/amber_eval/`, `~/results/amber_eval_v1_1/`, `~/results/amber_eval_v2/`, `~/results/amber_eval_v3/`, `~/results/amber_eval_v4/`, `~/results/amber_eval_v2_1/`, `~/results/amber_eval_v4_1/`
 
 ### Phase 5 — Bakta 기능 주석 ✅ 완료 (3/21)
 - Enhanced v1 bins (163개) Bakta v1.11.4 annotation 완료
