@@ -66,8 +66,11 @@ bash /workspace/evo2-mag/scripts/runpod_setup.sh
 
 1. **`run_embed.py`** — Evo 2 7B embedding extraction. Reads assembly FASTAs, mean-pools hidden states from layer `blocks.28.mlp.l3`, handles long contigs via non-overlapping chunking (max 512k bp). Outputs `contig_embeddings.npz` + `contig_names.txt`.
 2. **`run_cluster.py`** — HDBSCAN clustering on z-score normalized embeddings → `evo2_c2b.tsv` (contig-to-bin mapping) + per-bin FASTA files in `evo2_bins/` (Binette input format).
-3. **`run_perplexity.py`** — Sliding window (10 kb, 5 kb step) perplexity scoring for chimera detection. Windows >2σ above bin mean flagged as contamination candidates. Outputs `perplexity_windows.tsv` + `chimera_candidates.tsv`.
-4. **`runpod_setup.sh`** — One-stop RunPod script: scp data from PC101 → install deps → run_embed → run_cluster → scp results back.
+3. **`run_perplexity.py`** — Sliding window (8 kb, 4 kb step) perplexity scoring for chimera detection. Windows >2σ above bin mean flagged as contamination candidates. Outputs `perplexity_windows.tsv` + `chimera_candidates.tsv`.
+4. **`validate_chimera.py`** — CAMI2 gold standard 대비 키메라 탐지 정량 검증 (Precision/Recall/F1). Outputs `chimera_validation_detail.tsv` + `chimera_validation_summary.txt`.
+5. **`chimera_junction.py`** — Perplexity junction 탐지: 인접 window 간 delta(1차 미분) 최댓값으로 step-change 탐지. PC101 CPU 전용.
+6. **`chimera_embedding_dist.py`** — Embedding 거리 기반: 각 contig의 cosine distance를 자기 bin centroid vs 다른 bin centroid 비교, outlier_score로 키메라 판정. PC101 CPU 전용.
+7. **`runpod_setup.sh`** — One-stop RunPod script: scp data from PC101 → install deps → run_embed → run_cluster → scp results back.
 
 Pipeline order: mmlong2 baseline → `run_embed.py` (GPU) → `run_cluster.py` → Binette/DAS Tool merges MetaBAT2 + SemiBin2 + GraphMB + Evo2 bins. Chimera detection (`run_perplexity.py`) runs independently on bin FASTAs.
 
@@ -173,6 +176,36 @@ Revert after CAMI2 experiments.
 - 단, 모든 131 bins에서 최소 1개 window가 flagged → Precision 24.4% (FP 99개)
 - flagged ratio >5% 기준 적용 시 Recall 68.8%로 하락하지만 일부 precision 개선
 - **핵심 contribution**: CheckM2가 놓친 low-contamination chimera 30개를 Evo2가 추가 탐지 (checkm2_cont 0.00%~4.72% 범위)
+- **문제점**: Precision 24.4%는 131개 bin 전부 flagged되어 사실상 무차별 판정 → Phase 3c-v2에서 개선
+
+### Phase 3c-v2 — 키메라 탐지 개선 (2개 방향 병렬) 🔄 다음 실행
+
+현재 any-flag 방식의 Precision 24.4% 문제를 해결하기 위해 2개 방향을 **병렬**로 PC101에서 실행:
+
+**방향 1: Junction 탐지** (`chimera_junction.py`)
+- `perplexity_windows.tsv`의 인접 window 간 |delta| (1차 미분) 최댓값으로 판정
+- 진짜 키메라는 genome A→B 경계에서 perplexity가 갑자기 튀는 step-change가 있어야 함
+- every-other window 선택으로 비중첩화 (8kb window 4kb step → 독립 delta)
+- bin별 집계 (max/mean/p75/p90_junction) + threshold sweep → F1 최대화
+- 입력: `~/results/perplexity_windows.tsv` + `chimera_validation_detail.tsv` (gold standard)
+- 출력: `chimera_junction_summary.txt`, `chimera_junction_bins.tsv`, `chimera_junction_contigs.tsv`
+
+**방향 2: Bin 간 embedding 거리** (`chimera_embedding_dist.py`)
+- 각 bin centroid (embedded contigs 평균) 계산 → contig별 cosine distance 비교
+- outlier_score = d_own / d_nearest_other (>1.0이면 다른 bin에 더 가까움 = 키메라 의심)
+- `sklearn.metrics.pairwise.cosine_distances` 벡터화 연산 (131 centroids × ~42k contigs)
+- Method A (any outlier), B (fraction sweep), C (max_score sweep) → F1 최대화
+- 입력: `~/results/contig_embeddings.npz` + `contig_names.txt` + baseline bin FASTAs
+- 출력: `chimera_embedding_summary.txt`, `chimera_embedding_bins.tsv`, `chimera_embedding_contigs.tsv`
+
+**병렬 실행 (PC101, GPU 불필요)**:
+```bash
+conda activate mmlong2
+nohup python ~/evo2-mag/scripts/chimera_junction.py > ~/chimera_junction.log 2>&1 &
+nohup python ~/evo2-mag/scripts/chimera_embedding_dist.py > ~/chimera_embedding.log 2>&1 &
+```
+
+목표: Precision >0.5, Recall >0.8, F1 >0.55 (현재: P=0.24, R=1.0, F1=0.39)
 
 ### Phase 3 결과 (PC101 백업 완료)
 ```
