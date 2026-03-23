@@ -178,34 +178,50 @@ Revert after CAMI2 experiments.
 - **핵심 contribution**: CheckM2가 놓친 low-contamination chimera 30개를 Evo2가 추가 탐지 (checkm2_cont 0.00%~4.72% 범위)
 - **문제점**: Precision 24.4%는 131개 bin 전부 flagged되어 사실상 무차별 판정 → Phase 3c-v2에서 개선
 
-### Phase 3c-v2 — 키메라 탐지 개선 (2개 방향 병렬) 🔄 다음 실행
+### Phase 3c-v2 — 키메라 탐지 개선 (2개 방향 병렬) ✅ 완료 (3/23)
 
 현재 any-flag 방식의 Precision 24.4% 문제를 해결하기 위해 2개 방향을 **병렬**로 PC101에서 실행:
 
 **방향 1: Junction 탐지** (`chimera_junction.py`)
-- `perplexity_windows.tsv`의 인접 window 간 |delta| (1차 미분) 최댓값으로 판정
-- 진짜 키메라는 genome A→B 경계에서 perplexity가 갑자기 튀는 step-change가 있어야 함
-- every-other window 선택으로 비중첩화 (8kb window 4kb step → 독립 delta)
-- bin별 집계 (max/mean/p75/p90_junction) + threshold sweep → F1 최대화
-- 입력: `~/results/perplexity_windows.tsv` + `chimera_validation_detail.tsv` (gold standard)
+- 인접 window 간 |delta| (1차 미분) 최댓값으로 판정 — genome A→B 경계의 step-change 탐지
+- every-other window 비중첩화 (8kb window 4kb step → 독립 delta)
 - 출력: `chimera_junction_summary.txt`, `chimera_junction_bins.tsv`, `chimera_junction_contigs.tsv`
 
 **방향 2: Bin 간 embedding 거리** (`chimera_embedding_dist.py`)
-- 각 bin centroid (embedded contigs 평균) 계산 → contig별 cosine distance 비교
-- outlier_score = d_own / d_nearest_other (>1.0이면 다른 bin에 더 가까움 = 키메라 의심)
-- `sklearn.metrics.pairwise.cosine_distances` 벡터화 연산 (131 centroids × ~42k contigs)
-- Method A (any outlier), B (fraction sweep), C (max_score sweep) → F1 최대화
-- 입력: `~/results/contig_embeddings.npz` + `contig_names.txt` + baseline bin FASTAs
+- outlier_score = d_own / d_nearest_other (cosine distance, >1.0이면 다른 bin에 더 가까움)
+- Method A (any outlier), B (fraction sweep), C (max_score sweep) → threshold sweep
+- Embedding coverage 평균 96%, <50% bin 0개 (신뢰도 높음)
 - 출력: `chimera_embedding_summary.txt`, `chimera_embedding_bins.tsv`, `chimera_embedding_contigs.tsv`
 
-**병렬 실행 (PC101, GPU 불필요)**:
-```bash
-conda activate mmlong2
-nohup python ~/evo2-mag/scripts/chimera_junction.py > ~/chimera_junction.log 2>&1 &
-nohup python ~/evo2-mag/scripts/chimera_embedding_dist.py > ~/chimera_embedding.log 2>&1 &
-```
+**정량 검증 결과** (CAMI2 gold standard, 131 bins, 32 true chimeras):
 
-목표: Precision >0.5, Recall >0.8, F1 >0.55 (현재: P=0.24, R=1.0, F1=0.39)
+| Method | Precision | Recall | F1 | TP | FP | FN | Best threshold |
+|--------|-----------|--------|-----|----|----|----|----|
+| CheckM2 (>5%) | 0.3333 | 0.0625 | 0.1053 | 2 | 4 | 30 | N/A |
+| Evo2 perplexity (any, v1) | 0.2443 | 1.0000 | 0.3926 | 32 | 99 | 0 | N/A |
+| **Junction max_delta** | 0.2788 | 0.9062 | **0.4265** | 29 | 75 | 3 | 1.44 |
+| **Embedding Method C (max_outlier)** | **0.3418** | 0.8438 | **0.4865** | 27 | 52 | 5 | 10.19 |
+
+**분석**:
+- Embedding Method C가 F1 **0.4865**로 최고 — 기존 any-flag (0.3926) 대비 **+24% 개선**
+- FP 52개로 기존 99개 대비 **47% 감소** (Precision 0.24→0.34)
+- Junction은 Recall 90.6%로 높지만 FP가 여전히 75개
+- 두 방법이 놓치는 chimera가 다름 (Junction: 3개, Embedding: 5개, 겹침 0개) → 결합 가능성
+- CheckM2가 못 잡는 chimera: Junction 27개, Embedding 25개 추가 탐지
+
+**결합 분석** (`chimera_combine.py`):
+
+| Method | Precision | Recall | F1 | FP | 놓침 |
+|--------|-----------|--------|-----|-----|------|
+| Union (J ∪ E) | 0.2909 | **1.0000** | 0.4507 | 78 | 0 |
+| Intersection (J ∩ E) | 0.3288 | 0.7500 | 0.4571 | 49 | 8 |
+| Best 2D sweep (union, jt=1.96, et=13.80) | **0.3651** | 0.7188 | 0.4842 | 40 | 9 |
+
+- Union: Recall 100% 유지 + F1 0.39→0.45 (FP 99→78)
+- Embedding 단독 (Method C) F1 0.4865가 여전히 최고 균형
+- FP 분석: Embedding FP 52개 중 49개가 Junction FP와 겹침 → Embedding이 Junction을 거의 포함
+- **결론**: Embedding Method C 단독이 best. 논문 프레이밍: "Evo2 embedding distance가 perplexity보다 키메라 탐지에 더 효과적"
+- 출력: `chimera_combined_summary.txt`, `chimera_combined_detail.tsv`
 
 ### Phase 3 결과 (PC101 백업 완료)
 ```
